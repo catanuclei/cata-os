@@ -1,1 +1,1 @@
-console.log("CataOS");
+import "./styles/reset.scss";
