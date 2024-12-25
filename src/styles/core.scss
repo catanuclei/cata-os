@@ -15,3 +15,17 @@
   align-items: flex-end;
   color: #ffffff;
 }
+
+#window-manager {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.window {
+  padding: 4px;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+}
