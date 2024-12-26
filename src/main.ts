@@ -12,5 +12,11 @@ const windowManagerEl = document.getElementById('window-manager')!;
 
 initializeDesktopInfo(desktopEl.querySelector('.desktop__info')!);
 
-const windowManager = new WindowManager(windowManagerEl);
-windowManager.createWindow('Window 1');
+const windowManager = new WindowManager(windowManagerEl, desktopEl);
+windowManager.setDesktopContextMenu([
+  {
+    text: 'New Window',
+    handler: ({ menuPosition }) =>
+      windowManager.createWindow('Window', menuPosition),
+  },
+]);

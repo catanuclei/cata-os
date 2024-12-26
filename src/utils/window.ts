@@ -9,6 +9,8 @@ const WINDOW_TITLE_TEXT_CLASS = 'window__title__text';
 const WINDOW_TITLE_BUTTONS_CLASS = 'window__title__buttons';
 const WINDOW_TITLE_BUTTON_CLASS = 'window__title__button';
 const WINDOW_KEY_LENGTH = 6;
+const CONTEXT_MENU_CLASS = 'context-menu';
+const CONTEXT_MENU_ITEM_CLASS = 'context-menu__item';
 
 interface WindowInfo {
   title: string;
@@ -19,21 +21,56 @@ interface WindowResponse {
   key: string;
 }
 
+interface ContextMenuItem {
+  text: string;
+  handler: ({
+    menuPosition,
+  }: {
+    menuPosition: { x: number; y: number };
+  }) => unknown;
+}
+
 export class WindowManager {
   private _managerNode: HTMLElement;
+  private _desktopNode: HTMLElement;
+  private _contextNode: HTMLElement;
   private _windowMap: Record<string, WindowInfo>;
+  private _isContextOpen: boolean;
+  private _desktopContextItems: ContextMenuItem[];
 
-  public constructor(managerNode: HTMLElement) {
+  public constructor(managerNode: HTMLElement, desktopNode: HTMLElement) {
     this._managerNode = managerNode;
+    this._desktopNode = desktopNode;
+    this._contextNode = document.createElement('ul')!;
     this._windowMap = {};
+    this._isContextOpen = false;
+    this._desktopContextItems = [];
+
+    this._setupContextNode();
     let timeout: number;
     window.addEventListener('resize', () => {
       clearTimeout(timeout);
       timeout = setTimeout(this._shiftOutOfBoundsWindows, 150);
     });
+    window.addEventListener('mousedown', (e) => {
+      if (
+        (e.target as HTMLElement).classList.contains(CONTEXT_MENU_CLASS) ||
+        (e.target as HTMLElement).classList.contains(CONTEXT_MENU_ITEM_CLASS)
+      ) {
+        return;
+      }
+      this.closeContextMenu();
+    });
+    this._desktopNode.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this.openContextMenu(this._desktopContextItems, e.clientX, e.clientY);
+    });
   }
 
-  public createWindow = (title: string): WindowResponse => {
+  public createWindow = (
+    title: string,
+    position?: { x: number; y: number }
+  ): WindowResponse => {
     let key = this._generateWindowKey();
     while (this._windowMap[key]) {
       key = this._generateWindowKey();
@@ -44,15 +81,23 @@ export class WindowManager {
       : 0;
     const windowNode = _createWindowNode(
       { title, order: newOrder },
+      { x: position?.x ?? 0, y: position?.y ?? 0 },
       key,
       this.closeWindow,
-      this.focusWindow
+      this.focusWindow,
+      (key, mouseX, mouseY) =>
+        this.openContextMenu(
+          [{ text: 'Close', handler: () => this.closeWindow(key) }],
+          mouseX,
+          mouseY
+        )
     );
     this._managerNode.appendChild(windowNode);
     this._windowMap[key] = {
       title,
       order: newOrder,
     };
+    this._shiftOutOfBoundsWindow(key);
     return { key };
   };
 
@@ -88,6 +133,59 @@ export class WindowManager {
     });
   };
 
+  public openContextMenu = (
+    items: ContextMenuItem[],
+    mouseX: number,
+    mouseY: number
+  ): void => {
+    this.closeContextMenu();
+    if (!items.length) return;
+    items.forEach((item) => {
+      const node = document.createElement('li')!;
+      node.innerHTML = item.text;
+      node.classList.add(CONTEXT_MENU_ITEM_CLASS);
+      this._contextNode.appendChild(node);
+    });
+    this._isContextOpen = true;
+    this._contextNode.classList.add(`${CONTEXT_MENU_CLASS}--shown`);
+
+    const menuX =
+      mouseX + this._contextNode.offsetWidth > window.innerWidth
+        ? mouseX - this._contextNode.offsetWidth
+        : mouseX;
+    const menuY =
+      mouseY + this._contextNode.offsetHeight > window.innerHeight
+        ? mouseY - this._contextNode.offsetHeight
+        : mouseY;
+
+    ([...this._contextNode.children] as HTMLElement[]).forEach(
+      (node, index) => {
+        node.onclick = () => {
+          items[index].handler({ menuPosition: { x: menuX, y: menuY } });
+          this.closeContextMenu();
+        };
+      }
+    );
+
+    this._contextNode.style.left = `${menuX}px`;
+    this._contextNode.style.top = `${menuY}px`;
+  };
+
+  public setDesktopContextMenu = (items: ContextMenuItem[]): void => {
+    this._desktopContextItems = items;
+  };
+
+  public closeContextMenu = (): void => {
+    if (!this._isContextOpen) return;
+    this._contextNode.innerHTML = '';
+    this._contextNode.classList.remove(`${CONTEXT_MENU_CLASS}--shown`);
+  };
+
+  private _setupContextNode = (): void => {
+    this._contextNode.classList.add(CONTEXT_MENU_CLASS);
+    this._desktopNode.appendChild(this._contextNode);
+  };
+
   private _generateWindowKey = (): string => {
     let result = '';
     for (let i = 0; i < WINDOW_KEY_LENGTH; i++) {
@@ -109,13 +207,28 @@ export class WindowManager {
       }
     });
   };
+
+  private _shiftOutOfBoundsWindow = (key: string): void => {
+    if (!this._windowMap[key]) return;
+    const node = this._managerNode.querySelector(
+      `[data-key="${key}"]`
+    ) as HTMLElement;
+    if (node.offsetLeft > window.innerWidth - node.offsetWidth) {
+      node.style.left = window.innerWidth - node.offsetWidth + 'px';
+    }
+    if (node.offsetTop > window.innerHeight - node.offsetHeight) {
+      node.style.top = window.innerHeight - node.offsetHeight + 'px';
+    }
+  };
 }
 
 const _createWindowNode = (
   { title, order }: WindowInfo,
+  position: { x: number; y: number },
   key: string,
   closeHandler: (key: string) => void,
-  focusHandler: (key: string) => void
+  focusHandler: (key: string) => void,
+  contextHandler: (key: string, mouseX: number, mouseY: number) => void
 ): HTMLElement => {
   const node = document.createElement('div')!;
   const titleNode = document.createElement('p')!;
@@ -173,12 +286,16 @@ const _createWindowNode = (
   });
 
   node.addEventListener('mousedown', () => focusHandler(key));
+  node.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    contextHandler(key, e.clientX, e.clientY);
+  });
   closeIconNode.addEventListener('mousedown', () => closeHandler(key));
 
-  node.style.left = '0px';
-  node.style.top = '0px';
+  node.appendChild(titleNode);
+  node.style.left = `${position.x}px`;
+  node.style.top = `${position.y}px`;
   node.style.zIndex = order.toString();
   node.dataset.key = key;
-  node.appendChild(titleNode);
   return node;
 };
