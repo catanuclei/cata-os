@@ -12,6 +12,7 @@ const WINDOW_KEY_LENGTH = 6;
 
 interface WindowInfo {
   title: string;
+  order: number;
 }
 
 interface WindowResponse {
@@ -32,10 +33,20 @@ export class WindowManager {
     while (this._windowMap[key]) {
       key = this._generateWindowKey();
     }
-    const windowNode = _createWindowNode({ title }, key, this.closeWindow);
+    const newOrder = Object.values(this._windowMap).length
+      ? Object.values(this._windowMap).sort((a, b) => b.order - a.order)[0]
+          .order + 1
+      : 0;
+    const windowNode = _createWindowNode(
+      { title, order: newOrder },
+      key,
+      this.closeWindow,
+      this.focusWindow
+    );
     this._managerNode.appendChild(windowNode);
     this._windowMap[key] = {
       title,
+      order: newOrder,
     };
     return { key };
   };
@@ -43,7 +54,33 @@ export class WindowManager {
   public closeWindow = (key: string) => {
     if (!this._windowMap[key]) return;
     this._managerNode.querySelector(`[data-key="${key}"]`)?.remove();
+    const deletedOrder = this._windowMap[key].order;
+    Object.keys(this._windowMap).forEach((key) => {
+      if (this._windowMap[key].order > deletedOrder) {
+        this._windowMap[key].order--;
+      }
+    });
     delete this._windowMap[key];
+  };
+
+  public focusWindow = (key: string) => {
+    if (!this._windowMap[key]) return;
+    const originalOrder = this._windowMap[key].order;
+    const maxOrder = Object.values(this._windowMap).sort(
+      (a, b) => b.order - a.order
+    )[0].order;
+    Object.keys(this._windowMap).forEach((key) => {
+      if (this._windowMap[key].order > originalOrder) {
+        this._windowMap[key].order--;
+      }
+    });
+    this._windowMap[key].order = maxOrder;
+    (
+      [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
+    ).forEach((window) => {
+      const key = window.dataset.key!;
+      window.style.zIndex = this._windowMap[key].order.toString();
+    });
   };
 
   private _generateWindowKey = (): string => {
@@ -57,9 +94,10 @@ export class WindowManager {
 }
 
 const _createWindowNode = (
-  { title }: WindowInfo,
+  { title, order }: WindowInfo,
   key: string,
-  closeHandler: (key: string) => void
+  closeHandler: (key: string) => void,
+  focusHandler: (key: string) => void
 ): HTMLElement => {
   const node = document.createElement('div')!;
   const titleNode = document.createElement('p')!;
@@ -78,7 +116,6 @@ const _createWindowNode = (
 
   titleIconNode.appendChild(createIcon('window'));
   titleTextNode.innerHTML = title;
-  closeIconNode.addEventListener('click', () => closeHandler(key));
   closeButtonNode.appendChild(closeIconNode);
   titleButtonsNode.appendChild(closeButtonNode);
   titleNode.appendChild(titleIconNode);
@@ -117,6 +154,12 @@ const _createWindowNode = (
     document.addEventListener('mouseup', onMouseUp);
   });
 
+  node.addEventListener('mousedown', () => focusHandler(key));
+  closeIconNode.addEventListener('mousedown', () => closeHandler(key));
+
+  node.style.left = '0px';
+  node.style.top = '0px';
+  node.style.zIndex = order.toString();
   node.dataset.key = key;
   node.appendChild(titleNode);
   return node;
