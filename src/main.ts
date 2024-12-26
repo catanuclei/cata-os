@@ -16,5 +16,3 @@ const windowManager = new WindowManager(windowManagerEl);
 windowManager.createWindow('Window 1');
 windowManager.createWindow('Window 2');
 windowManager.createWindow('Window 3');
-windowManager.createWindow('Window 4');
-windowManager.createWindow('Window 5');

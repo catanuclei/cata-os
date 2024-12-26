@@ -85,6 +85,38 @@ const _createWindowNode = (
   titleNode.appendChild(titleTextNode);
   titleNode.appendChild(titleButtonsNode);
 
+  titleNode.addEventListener('mousedown', (e) => {
+    const width = node.offsetWidth;
+    const height = node.offsetHeight;
+    const baseX = e.clientX - node.offsetLeft;
+    const baseY = e.clientY - node.offsetTop;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const usedTop =
+        e.clientY - baseY < 0
+          ? 0
+          : e.clientY - baseY >= window.innerHeight - height
+            ? window.innerHeight - height
+            : e.clientY - baseY;
+      const usedLeft =
+        e.clientX - baseX < 0
+          ? 0
+          : e.clientX - baseX >= window.innerWidth - width
+            ? window.innerWidth - width
+            : e.clientX - baseX;
+      node.style.left = usedLeft + 'px';
+      node.style.top = usedTop + 'px';
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
+
   node.dataset.key = key;
   node.appendChild(titleNode);
   return node;
