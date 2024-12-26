@@ -18,6 +18,3 @@ windowManager.createWindow('Window 2');
 windowManager.createWindow('Window 3');
 windowManager.createWindow('Window 4');
 windowManager.createWindow('Window 5');
-
-console.log(desktopEl);
-console.log(windowManagerEl);
