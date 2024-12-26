@@ -1,5 +1,5 @@
 import { initializeDesktopInfo } from '@utils/setup';
-import { createWindow } from '@utils/window';
+import { WindowManager } from '@utils/window';
 
 import 'bootstrap-icons/font/bootstrap-icons.min.css';
 
@@ -11,11 +11,13 @@ export const desktopEl = document.getElementById('desktop')!;
 export const windowManagerEl = document.getElementById('window-manager')!;
 
 initializeDesktopInfo(desktopEl.querySelector('.desktop__info')!);
-createWindow('Window 1');
-createWindow('Window 2');
-createWindow('Window 3');
-createWindow('Window 4');
-createWindow('Window 5');
+
+const windowManager = new WindowManager(windowManagerEl);
+windowManager.createWindow('Window 1');
+windowManager.createWindow('Window 2');
+windowManager.createWindow('Window 3');
+windowManager.createWindow('Window 4');
+windowManager.createWindow('Window 5');
 
 console.log(desktopEl);
 console.log(windowManagerEl);
