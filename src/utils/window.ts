@@ -4,6 +4,10 @@ import { KEY_CHARACTERS } from './constants';
 
 const WINDOW_CLASS = 'window';
 const WINDOW_TITLE_CLASS = 'window__title';
+const WINDOW_TITLE_ICON_CLASS = 'window__title__icon';
+const WINDOW_TITLE_TEXT_CLASS = 'window__title__text';
+const WINDOW_TITLE_BUTTONS_CLASS = 'window__title__buttons';
+const WINDOW_TITLE_BUTTON_CLASS = 'window__title__button';
 const WINDOW_KEY_LENGTH = 6;
 
 interface WindowInfo {
@@ -59,15 +63,29 @@ const _createWindowNode = (
 ): HTMLElement => {
   const node = document.createElement('div')!;
   const titleNode = document.createElement('p')!;
-  const titleCloseNode = createIcon('x');
+  const titleIconNode = document.createElement('span')!;
+  const titleTextNode = document.createElement('span')!;
+  const titleButtonsNode = document.createElement('div')!;
+  const closeButtonNode = document.createElement('button')!;
+  const closeIconNode = createIcon('x');
+
+  node.classList.add(WINDOW_CLASS);
+  titleNode.classList.add(WINDOW_TITLE_CLASS);
+  titleIconNode.classList.add(WINDOW_TITLE_ICON_CLASS);
+  titleTextNode.classList.add(WINDOW_TITLE_TEXT_CLASS);
+  titleButtonsNode.classList.add(WINDOW_TITLE_BUTTONS_CLASS);
+  closeButtonNode.classList.add(WINDOW_TITLE_BUTTON_CLASS);
+
+  titleIconNode.appendChild(createIcon('window'));
+  titleTextNode.innerHTML = title;
+  closeIconNode.addEventListener('click', () => closeHandler(key));
+  closeButtonNode.appendChild(closeIconNode);
+  titleButtonsNode.appendChild(closeButtonNode);
+  titleNode.appendChild(titleIconNode);
+  titleNode.appendChild(titleTextNode);
+  titleNode.appendChild(titleButtonsNode);
 
   node.dataset.key = key;
-  titleNode.classList.add(WINDOW_TITLE_CLASS);
-  titleNode.innerHTML = title;
-  titleCloseNode.addEventListener('click', () => closeHandler(key));
-  titleNode.appendChild(titleCloseNode);
   node.appendChild(titleNode);
-  node.classList.add(WINDOW_CLASS);
-
   return node;
 };

@@ -25,7 +25,36 @@
 }
 
 .window {
-  padding: 4px;
   color: #ffffff;
   border: 1px solid #ffffff;
+
+  &__title {
+    display: flex;
+    align-items: center;
+
+    &__buttons {
+      display: flex;
+      align-items: center;
+      margin-left: auto;
+      height: 100%;
+      border-left: 1px solid #ffffff;
+    }
+
+    &__button {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      background-color: unset;
+      color: #ffffff;
+      border: unset;
+      outline: unset;
+      cursor: pointer;
+    }
+  }
+}
+
+.bi {
+  display: flex;
+  align-items: center;
 }
