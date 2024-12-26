@@ -26,6 +26,11 @@ export class WindowManager {
   public constructor(managerNode: HTMLElement) {
     this._managerNode = managerNode;
     this._windowMap = {};
+    let timeout: number;
+    window.addEventListener('resize', () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(this._shiftOutOfBoundsWindows, 150);
+    });
   }
 
   public createWindow = (title: string): WindowResponse => {
@@ -77,9 +82,9 @@ export class WindowManager {
     this._windowMap[key].order = maxOrder;
     (
       [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
-    ).forEach((window) => {
-      const key = window.dataset.key!;
-      window.style.zIndex = this._windowMap[key].order.toString();
+    ).forEach((osWindow) => {
+      const key = osWindow.dataset.key!;
+      osWindow.style.zIndex = this._windowMap[key].order.toString();
     });
   };
 
@@ -90,6 +95,19 @@ export class WindowManager {
         KEY_CHARACTERS[Math.floor(Math.random() * KEY_CHARACTERS.length)];
     }
     return result;
+  };
+
+  private _shiftOutOfBoundsWindows = (): void => {
+    (
+      [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
+    ).forEach((osWindow) => {
+      if (osWindow.offsetLeft > window.innerWidth - osWindow.offsetWidth) {
+        osWindow.style.left = window.innerWidth - osWindow.offsetWidth + 'px';
+      }
+      if (osWindow.offsetTop > window.innerHeight - osWindow.offsetHeight) {
+        osWindow.style.top = window.innerHeight - osWindow.offsetHeight + 'px';
+      }
+    });
   };
 }
 
