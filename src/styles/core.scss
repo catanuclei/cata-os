@@ -50,8 +50,9 @@
     user-select: none;
 
     &__icon {
-      padding: 0 2px;
-      font-size: 13px;
+      margin-left: 2px;
+      margin-right: 4px;
+      font-size: 10px;
     }
 
     &__text {
@@ -103,6 +104,74 @@
         background-color: #000000;
         color: #ffffff;
       }
+    }
+  }
+
+  &__resize-box {
+    position: absolute;
+
+    &--top {
+      top: -2px;
+      left: 4px;
+      width: calc(100% - 8px);
+      height: 4px;
+      cursor: n-resize;
+    }
+
+    &--bottom {
+      bottom: -2px;
+      left: 4px;
+      width: calc(100% - 8px);
+      height: 4px;
+      cursor: s-resize;
+    }
+
+    &--left {
+      top: 4px;
+      left: -2px;
+      width: 4px;
+      height: calc(100% - 8px);
+      cursor: w-resize;
+    }
+
+    &--right {
+      top: 4px;
+      right: -2px;
+      width: 4px;
+      height: calc(100% - 8px);
+      cursor: e-resize;
+    }
+
+    &--top-left {
+      top: -2px;
+      left: -2px;
+      width: 4px;
+      height: 4px;
+      cursor: nw-resize;
+    }
+
+    &--top-right {
+      top: -2px;
+      right: -2px;
+      width: 4px;
+      height: 4px;
+      cursor: ne-resize;
+    }
+
+    &--bottom-left {
+      bottom: -2px;
+      left: -2px;
+      width: 4px;
+      height: 4px;
+      cursor: sw-resize;
+    }
+
+    &--bottom-right {
+      bottom: -2px;
+      right: -2px;
+      width: 4px;
+      height: 4px;
+      cursor: se-resize;
     }
   }
 }

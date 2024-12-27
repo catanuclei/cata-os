@@ -22,10 +22,37 @@ contentImageNode.height = 16;
 
 windowManager.setDesktopContextMenu([
   {
-    text: 'New Window',
+    text: 'New Window (Icon 1)',
     handler: ({ menuPosition }) =>
       windowManager.createWindow(
         'Window',
+        'window',
+        [
+          contentTextNode.cloneNode(true) as HTMLElement,
+          contentImageNode.cloneNode(true) as HTMLElement,
+        ],
+        menuPosition
+      ),
+  },
+  {
+    text: 'New Window (Icon 2)',
+    handler: ({ menuPosition }) =>
+      windowManager.createWindow(
+        'Window',
+        'box',
+        [
+          contentTextNode.cloneNode(true) as HTMLElement,
+          contentImageNode.cloneNode(true) as HTMLElement,
+        ],
+        menuPosition
+      ),
+  },
+  {
+    text: 'New Window (Icon 3)',
+    handler: ({ menuPosition }) =>
+      windowManager.createWindow(
+        'Window',
+        'brilliance',
         [
           contentTextNode.cloneNode(true) as HTMLElement,
           contentImageNode.cloneNode(true) as HTMLElement,

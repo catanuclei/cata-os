@@ -11,12 +11,22 @@ const WINDOW_TITLE_TEXT_CLASS = 'window__title__text';
 const WINDOW_TITLE_BUTTONS_CLASS = 'window__title__buttons';
 const WINDOW_TITLE_BUTTON_CLASS = 'window__title__button';
 const WINDOW_CONTENT_CLASS = 'window__content';
+const WINDOW_RESIZE_BOX_CLASS = 'window__resize-box';
+const WINDOW_RESIZE_BOX_TOP_CLASS = 'window__resize-box--top';
+const WINDOW_RESIZE_BOX_RIGHT_CLASS = 'window__resize-box--right';
+const WINDOW_RESIZE_BOX_BOTTOM_CLASS = 'window__resize-box--bottom';
+const WINDOW_RESIZE_BOX_LEFT_CLASS = 'window__resize-box--left';
+const WINDOW_RESIZE_BOX_TOP_LEFT_CLASS = 'window__resize-box--top-left';
+const WINDOW_RESIZE_BOX_TOP_RIGHT_CLASS = 'window__resize-box--top-right';
+const WINDOW_RESIZE_BOX_BOTTOM_LEFT_CLASS = 'window__resize-box--bottom-left';
+const WINDOW_RESIZE_BOX_BOTTOM_RIGHT_CLASS = 'window__resize-box--bottom-right';
 const WINDOW_KEY_LENGTH = 6;
 const CONTEXT_MENU_CLASS = 'context-menu';
 const CONTEXT_MENU_ITEM_CLASS = 'context-menu__item';
 
 interface WindowInfo {
   title: string;
+  icon: string | null;
   order: number;
 }
 
@@ -78,6 +88,7 @@ export class WindowManager {
 
   public createWindow = (
     title: string,
+    icon: string | null,
     children: HTMLElement[] | null = null,
     position: { x: number; y: number } = { x: 0, y: 0 }
   ): WindowResponse => {
@@ -91,6 +102,7 @@ export class WindowManager {
       : 0;
     const windowInfo: WindowInfo = {
       title,
+      icon,
       order: newOrder,
     };
     const windowNode = _createWindowNode(
@@ -275,7 +287,7 @@ export class WindowManager {
 }
 
 const _createWindowNode = (
-  { title, order }: WindowInfo,
+  { title, icon, order }: WindowInfo,
   children: HTMLElement[] | null,
   position: { x: number; y: number },
   key: string,
@@ -293,6 +305,49 @@ const _createWindowNode = (
   const closeIconNode = createIcon('x-lg');
   const contentNode = document.createElement('div'!);
 
+  // Resize Boxes
+  const topResizeBoxNode = document.createElement('div')!;
+  const rightResizeBoxNode = document.createElement('div')!;
+  const bottomResizeBoxNode = document.createElement('div')!;
+  const leftResizeBoxNode = document.createElement('div')!;
+  const topLeftResizeBoxNode = document.createElement('div')!;
+  const topRightResizeBoxNode = document.createElement('div')!;
+  const bottomLeftResizeBoxNode = document.createElement('div')!;
+  const bottomRightResizeBoxNode = document.createElement('div')!;
+
+  topResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_TOP_CLASS
+  );
+  rightResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_RIGHT_CLASS
+  );
+  bottomResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_BOTTOM_CLASS
+  );
+  leftResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_LEFT_CLASS
+  );
+  topLeftResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_TOP_LEFT_CLASS
+  );
+  topRightResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_TOP_RIGHT_CLASS
+  );
+  bottomLeftResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_BOTTOM_LEFT_CLASS
+  );
+  bottomRightResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_BOTTOM_RIGHT_CLASS
+  );
+
   node.classList.add(WINDOW_CLASS);
   titleNode.classList.add(WINDOW_TITLE_CLASS);
   titleIconNode.classList.add(WINDOW_TITLE_ICON_CLASS);
@@ -301,11 +356,16 @@ const _createWindowNode = (
   closeButtonNode.classList.add(WINDOW_TITLE_BUTTON_CLASS);
   contentNode.classList.add(WINDOW_CONTENT_CLASS);
 
-  titleIconNode.appendChild(createIcon('window'));
+  if (icon) {
+    titleIconNode.appendChild(createIcon(icon));
+  }
+
   titleTextNode.innerHTML = title;
   closeButtonNode.appendChild(closeIconNode);
   titleButtonsNode.appendChild(closeButtonNode);
-  titleNode.appendChild(titleIconNode);
+  if (icon) {
+    titleNode.appendChild(titleIconNode);
+  }
   titleNode.appendChild(titleTextNode);
   titleNode.appendChild(titleButtonsNode);
 
@@ -354,6 +414,15 @@ const _createWindowNode = (
     contextHandler(key, e.clientX, e.clientY);
   });
   closeButtonNode.addEventListener('mousedown', () => closeHandler(key));
+
+  node.appendChild(topResizeBoxNode);
+  node.appendChild(rightResizeBoxNode);
+  node.appendChild(bottomResizeBoxNode);
+  node.appendChild(leftResizeBoxNode);
+  node.appendChild(topLeftResizeBoxNode);
+  node.appendChild(topRightResizeBoxNode);
+  node.appendChild(bottomLeftResizeBoxNode);
+  node.appendChild(bottomRightResizeBoxNode);
 
   node.appendChild(titleNode);
   if (children !== null) {
