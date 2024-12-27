@@ -27,6 +27,7 @@ const CONTEXT_MENU_ITEM_CLASS = 'context-menu__item';
 interface WindowInfo {
   title: string;
   icon: string | null;
+  minDimensions: { width: number; height: number };
   order: number;
 }
 
@@ -90,7 +91,8 @@ export class WindowManager {
     title: string,
     icon: string | null,
     children: HTMLElement[] | null = null,
-    position: { x: number; y: number } = { x: 0, y: 0 }
+    position: { x: number; y: number } = { x: 0, y: 0 },
+    minDimensions: { width: number; height: number } = { width: 96, height: 72 }
   ): WindowResponse => {
     let key = this._generateWindowKey();
     while (this._windowMap[key]) {
@@ -103,6 +105,7 @@ export class WindowManager {
     const windowInfo: WindowInfo = {
       title,
       icon,
+      minDimensions,
       order: newOrder,
     };
     const windowNode = _createWindowNode(
@@ -287,7 +290,7 @@ export class WindowManager {
 }
 
 const _createWindowNode = (
-  { title, icon, order }: WindowInfo,
+  { title, icon, minDimensions, order }: WindowInfo,
   children: HTMLElement[] | null,
   position: { x: number; y: number },
   key: string,
@@ -415,6 +418,115 @@ const _createWindowNode = (
   });
   closeButtonNode.addEventListener('mousedown', () => closeHandler(key));
 
+  const onResize = (e: MouseEvent, axis: { x: number; y: number }) => {
+    const boundingRect = node.getBoundingClientRect();
+    const baseX = e.clientX;
+    const baseY = e.clientY;
+    const maxWidth = window.innerWidth - boundingRect.left;
+    const maxHeight = window.innerHeight - boundingRect.top;
+    const minWidth = minDimensions.width;
+    const minHeight = minDimensions.height;
+
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (e: MouseEvent) => {
+      let usedX: number = boundingRect.left;
+      let usedY: number = boundingRect.top;
+
+      if (axis.x === 1) {
+        let newWidth = boundingRect.width + e.clientX - baseX;
+        if (newWidth >= minWidth) {
+          if (newWidth >= maxWidth) {
+            newWidth = maxWidth;
+          }
+        } else {
+          newWidth = minWidth;
+        }
+        node.style.width = `${newWidth}px`;
+      } else if (axis.x === -1) {
+        let newWidth = boundingRect.width - (e.clientX - baseX);
+        let newLeft = boundingRect.left;
+        if (e.clientX >= 0) {
+          if (boundingRect.right - e.clientX <= minWidth) {
+            newWidth = minWidth;
+            newLeft = boundingRect.right - minWidth;
+          } else {
+            newLeft = boundingRect.left + (e.clientX - baseX);
+          }
+        } else {
+          newWidth = boundingRect.right;
+          newLeft = 0;
+        }
+        if (newLeft < 0) newLeft = 0;
+        node.style.width = `${newWidth}px`;
+        usedX = newLeft;
+      }
+      if (axis.y === 1) {
+        let newHeight = boundingRect.height + e.clientY - baseY;
+        if (newHeight >= minHeight) {
+          if (newHeight >= maxHeight) {
+            newHeight = maxHeight;
+          }
+        } else {
+          newHeight = minHeight;
+        }
+        node.style.height = `${newHeight}px`;
+      } else if (axis.y === -1) {
+        let newHeight = boundingRect.height - (e.clientY - baseY);
+        let newTop = boundingRect.top;
+        if (e.clientY >= 0) {
+          if (boundingRect.bottom - e.clientY <= minHeight) {
+            newHeight = minHeight;
+            newTop = boundingRect.bottom - minHeight;
+          } else {
+            newTop = boundingRect.top + (e.clientY - baseY);
+          }
+        } else {
+          newHeight = boundingRect.bottom;
+          newTop = 0;
+        }
+        if (newTop < 0) newTop = 0;
+        node.style.height = `${newHeight}px`;
+        usedY = newTop;
+      }
+      node.style.translate = `${usedX}px ${usedY}px`;
+    };
+
+    const onMouseUp = () => {
+      document.body.style.userSelect = 'unset';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  topResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: 0, y: -1 })
+  );
+  bottomResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: 0, y: 1 })
+  );
+  leftResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: -1, y: 0 })
+  );
+  rightResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: 1, y: 0 })
+  );
+  topLeftResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: -1, y: -1 })
+  );
+  topRightResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: 1, y: -1 })
+  );
+  bottomLeftResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: -1, y: 1 })
+  );
+  bottomRightResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: 1, y: 1 })
+  );
+
   node.appendChild(topResizeBoxNode);
   node.appendChild(rightResizeBoxNode);
   node.appendChild(bottomResizeBoxNode);
@@ -428,6 +540,8 @@ const _createWindowNode = (
   if (children !== null) {
     node.appendChild(contentNode);
   }
+  node.style.minWidth = `${minDimensions.width}px`;
+  node.style.minHeight = `${minDimensions.height}px`;
   node.style.translate = `${position.x}px ${position.y}px`;
   node.style.zIndex = order.toString();
   node.dataset.key = key;
