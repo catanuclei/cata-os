@@ -8,6 +8,7 @@ const WINDOW_TITLE_ICON_CLASS = 'window__title__icon';
 const WINDOW_TITLE_TEXT_CLASS = 'window__title__text';
 const WINDOW_TITLE_BUTTONS_CLASS = 'window__title__buttons';
 const WINDOW_TITLE_BUTTON_CLASS = 'window__title__button';
+const WINDOW_CONTENT_CLASS = 'window__content';
 const WINDOW_KEY_LENGTH = 6;
 const CONTEXT_MENU_CLASS = 'context-menu';
 const CONTEXT_MENU_ITEM_CLASS = 'context-menu__item';
@@ -69,7 +70,8 @@ export class WindowManager {
 
   public createWindow = (
     title: string,
-    position?: { x: number; y: number }
+    children: HTMLElement[] | null = null,
+    position: { x: number; y: number } = { x: 0, y: 0 }
   ): WindowResponse => {
     let key = this._generateWindowKey();
     while (this._windowMap[key]) {
@@ -81,6 +83,7 @@ export class WindowManager {
       : 0;
     const windowNode = _createWindowNode(
       { title, order: newOrder },
+      children,
       { x: position?.x ?? 0, y: position?.y ?? 0 },
       key,
       this.closeWindow,
@@ -224,6 +227,7 @@ export class WindowManager {
 
 const _createWindowNode = (
   { title, order }: WindowInfo,
+  children: HTMLElement[] | null,
   position: { x: number; y: number },
   key: string,
   closeHandler: (key: string) => void,
@@ -237,6 +241,7 @@ const _createWindowNode = (
   const titleButtonsNode = document.createElement('div')!;
   const closeButtonNode = document.createElement('button')!;
   const closeIconNode = createIcon('x');
+  const contentNode = document.createElement('div'!);
 
   node.classList.add(WINDOW_CLASS);
   titleNode.classList.add(WINDOW_TITLE_CLASS);
@@ -244,6 +249,7 @@ const _createWindowNode = (
   titleTextNode.classList.add(WINDOW_TITLE_TEXT_CLASS);
   titleButtonsNode.classList.add(WINDOW_TITLE_BUTTONS_CLASS);
   closeButtonNode.classList.add(WINDOW_TITLE_BUTTON_CLASS);
+  contentNode.classList.add(WINDOW_CONTENT_CLASS);
 
   titleIconNode.appendChild(createIcon('window'));
   titleTextNode.innerHTML = title;
@@ -252,6 +258,12 @@ const _createWindowNode = (
   titleNode.appendChild(titleIconNode);
   titleNode.appendChild(titleTextNode);
   titleNode.appendChild(titleButtonsNode);
+
+  if (children) {
+    children.forEach((child) => {
+      contentNode.appendChild(child);
+    });
+  }
 
   titleNode.addEventListener('mousedown', (e) => {
     const width = node.offsetWidth;
@@ -293,6 +305,9 @@ const _createWindowNode = (
   closeIconNode.addEventListener('mousedown', () => closeHandler(key));
 
   node.appendChild(titleNode);
+  if (children !== null) {
+    node.appendChild(contentNode);
+  }
   node.style.left = `${position.x}px`;
   node.style.top = `${position.y}px`;
   node.style.zIndex = order.toString();

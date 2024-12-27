@@ -33,6 +33,7 @@
   position: absolute;
   top: 0;
   left: 0;
+  background-color: #000000;
   color: #ffffff;
   border: 1px solid #ffffff;
   width: max-content;
@@ -41,11 +42,22 @@
   &__title {
     display: flex;
     align-items: center;
+    height: 15px;
     background-color: #000000;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
+
+    &__icon {
+      padding: 0 2px;
+      font-size: 13px;
+    }
+
+    &__text {
+      position: relative;
+      top: 1px;
+    }
 
     &__buttons {
       display: flex;
@@ -60,12 +72,21 @@
       justify-content: center;
       align-items: center;
       height: 100%;
-      background-color: unset;
+      background-color: #000000;
       color: #ffffff;
       border: unset;
       outline: unset;
       cursor: pointer;
+
+      &:hover {
+        background-color: #ffffff;
+        color: #000000;
+      }
     }
+  }
+
+  &__content {
+    border-top: 1px solid #ffffff;
   }
 }
 
