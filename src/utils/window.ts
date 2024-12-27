@@ -1,5 +1,6 @@
 import { createIcon } from './icon';
 
+import { OsEventType, getOsFocusEvent } from './event';
 import { KEY_CHARACTERS } from './constants';
 
 const WINDOW_CLASS = 'window';
@@ -66,6 +67,7 @@ export class WindowManager {
       e.preventDefault();
       this.openContextMenu(this._desktopContextItems, e.clientX, e.clientY);
     });
+    this._initializeEventListeners();
   }
 
   public createWindow = (
@@ -81,8 +83,12 @@ export class WindowManager {
       ? Object.values(this._windowMap).sort((a, b) => b.order - a.order)[0]
           .order + 1
       : 0;
+    const windowInfo: WindowInfo = {
+      title,
+      order: newOrder,
+    };
     const windowNode = _createWindowNode(
-      { title, order: newOrder },
+      windowInfo,
       children,
       { x: position?.x ?? 0, y: position?.y ?? 0 },
       key,
@@ -96,11 +102,9 @@ export class WindowManager {
         )
     );
     this._managerNode.appendChild(windowNode);
-    this._windowMap[key] = {
-      title,
-      order: newOrder,
-    };
+    this._windowMap[key] = windowInfo;
     this._shiftOutOfBoundsWindow(key);
+    this.focusWindow(key);
     return { key };
   };
 
@@ -118,22 +122,7 @@ export class WindowManager {
 
   public focusWindow = (key: string) => {
     if (!this._windowMap[key]) return;
-    const originalOrder = this._windowMap[key].order;
-    const maxOrder = Object.values(this._windowMap).sort(
-      (a, b) => b.order - a.order
-    )[0].order;
-    Object.keys(this._windowMap).forEach((key) => {
-      if (this._windowMap[key].order > originalOrder) {
-        this._windowMap[key].order--;
-      }
-    });
-    this._windowMap[key].order = maxOrder;
-    (
-      [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
-    ).forEach((osWindow) => {
-      const key = osWindow.dataset.key!;
-      osWindow.style.zIndex = this._windowMap[key].order.toString();
-    });
+    this._managerNode.dispatchEvent(getOsFocusEvent(key));
   };
 
   public openContextMenu = (
@@ -197,6 +186,25 @@ export class WindowManager {
     return result;
   };
 
+  private _focusWindow = (key: string) => {
+    const originalOrder = this._windowMap[key].order;
+    const maxOrder = Object.values(this._windowMap).sort(
+      (a, b) => b.order - a.order
+    )[0].order;
+    Object.keys(this._windowMap).forEach((key) => {
+      if (this._windowMap[key].order > originalOrder) {
+        this._windowMap[key].order--;
+      }
+    });
+    this._windowMap[key].order = maxOrder;
+    (
+      [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
+    ).forEach((osWindow) => {
+      const key = osWindow.dataset.key!;
+      osWindow.style.zIndex = this._windowMap[key].order.toString();
+    });
+  };
+
   private _shiftOutOfBoundsWindows = (): void => {
     (
       [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
@@ -206,9 +214,13 @@ export class WindowManager {
       let usedTop = boundingRect.top;
       if (boundingRect.left > window.innerWidth - osWindow.offsetWidth) {
         usedLeft = window.innerWidth - osWindow.offsetWidth;
+      } else if (boundingRect.left < 0) {
+        usedLeft = 0;
       }
       if (boundingRect.top > window.innerHeight - osWindow.offsetHeight) {
         usedTop = window.innerHeight - osWindow.offsetHeight;
+      } else if (boundingRect.top < 0) {
+        usedTop = 0;
       }
       osWindow.style.translate = `${usedLeft}px ${usedTop}px`;
     });
@@ -224,11 +236,22 @@ export class WindowManager {
     let usedTop = boundingRect.top;
     if (boundingRect.left > window.innerWidth - node.offsetWidth) {
       usedLeft = window.innerWidth - node.offsetWidth;
+    } else if (boundingRect.left < 0) {
+      usedLeft = 0;
     }
     if (boundingRect.top > window.innerHeight - node.offsetHeight) {
       usedTop = window.innerHeight - node.offsetHeight;
+    } else if (boundingRect.top < 0) {
+      usedTop = 0;
     }
     node.style.translate = `${usedLeft}px ${usedTop}px`;
+  };
+
+  private _initializeEventListeners = (): void => {
+    this._managerNode.addEventListener(OsEventType.FOCUS, (e: Event) => {
+      const key = (e as CustomEvent).detail.key;
+      this._focusWindow(key);
+    });
   };
 }
 
@@ -247,7 +270,7 @@ const _createWindowNode = (
   const titleTextNode = document.createElement('span')!;
   const titleButtonsNode = document.createElement('div')!;
   const closeButtonNode = document.createElement('button')!;
-  const closeIconNode = createIcon('x');
+  const closeIconNode = createIcon('x-lg');
   const contentNode = document.createElement('div'!);
 
   node.classList.add(WINDOW_CLASS);
@@ -309,7 +332,7 @@ const _createWindowNode = (
     e.preventDefault();
     contextHandler(key, e.clientX, e.clientY);
   });
-  closeIconNode.addEventListener('mousedown', () => closeHandler(key));
+  closeButtonNode.addEventListener('mousedown', () => closeHandler(key));
 
   node.appendChild(titleNode);
   if (children !== null) {

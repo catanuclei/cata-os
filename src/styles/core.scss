@@ -64,19 +64,21 @@
       align-items: center;
       margin-left: auto;
       height: 100%;
-      border-left: 1px solid #ffffff;
     }
 
     &__button {
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100%;
+      width: 15px;
+      height: 15px;
       background-color: #000000;
       color: #ffffff;
       border: unset;
+      border-left: 1px solid #ffffff;
       outline: unset;
       cursor: pointer;
+      font-size: 10px;
 
       &:hover {
         background-color: #ffffff;
