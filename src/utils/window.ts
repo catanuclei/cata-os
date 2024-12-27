@@ -170,8 +170,7 @@ export class WindowManager {
       }
     );
 
-    this._contextNode.style.left = `${menuX}px`;
-    this._contextNode.style.top = `${menuY}px`;
+    this._contextNode.style.translate = `${menuX}px ${menuY}px`;
   };
 
   public setDesktopContextMenu = (items: ContextMenuItem[]): void => {
@@ -202,12 +201,16 @@ export class WindowManager {
     (
       [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
     ).forEach((osWindow) => {
-      if (osWindow.offsetLeft > window.innerWidth - osWindow.offsetWidth) {
-        osWindow.style.left = window.innerWidth - osWindow.offsetWidth + 'px';
+      const boundingRect = osWindow.getBoundingClientRect();
+      let usedLeft = boundingRect.left;
+      let usedTop = boundingRect.top;
+      if (boundingRect.left > window.innerWidth - osWindow.offsetWidth) {
+        usedLeft = window.innerWidth - osWindow.offsetWidth;
       }
-      if (osWindow.offsetTop > window.innerHeight - osWindow.offsetHeight) {
-        osWindow.style.top = window.innerHeight - osWindow.offsetHeight + 'px';
+      if (boundingRect.top > window.innerHeight - osWindow.offsetHeight) {
+        usedTop = window.innerHeight - osWindow.offsetHeight;
       }
+      osWindow.style.translate = `${usedLeft}px ${usedTop}px`;
     });
   };
 
@@ -216,12 +219,16 @@ export class WindowManager {
     const node = this._managerNode.querySelector(
       `[data-key="${key}"]`
     ) as HTMLElement;
-    if (node.offsetLeft > window.innerWidth - node.offsetWidth) {
-      node.style.left = window.innerWidth - node.offsetWidth + 'px';
+    const boundingRect = node.getBoundingClientRect();
+    let usedLeft = boundingRect.left;
+    let usedTop = boundingRect.top;
+    if (boundingRect.left > window.innerWidth - node.offsetWidth) {
+      usedLeft = window.innerWidth - node.offsetWidth;
     }
-    if (node.offsetTop > window.innerHeight - node.offsetHeight) {
-      node.style.top = window.innerHeight - node.offsetHeight + 'px';
+    if (boundingRect.top > window.innerHeight - node.offsetHeight) {
+      usedTop = window.innerHeight - node.offsetHeight;
     }
+    node.style.translate = `${usedLeft}px ${usedTop}px`;
   };
 }
 
@@ -268,8 +275,9 @@ const _createWindowNode = (
   titleNode.addEventListener('mousedown', (e) => {
     const width = node.offsetWidth;
     const height = node.offsetHeight;
-    const baseX = e.clientX - node.offsetLeft;
-    const baseY = e.clientY - node.offsetTop;
+    const boundingRect = node.getBoundingClientRect();
+    const baseX = e.clientX - boundingRect.left;
+    const baseY = e.clientY - boundingRect.top;
 
     const onMouseMove = (e: MouseEvent) => {
       const usedTop =
@@ -284,8 +292,7 @@ const _createWindowNode = (
           : e.clientX - baseX >= window.innerWidth - width
             ? window.innerWidth - width
             : e.clientX - baseX;
-      node.style.left = usedLeft + 'px';
-      node.style.top = usedTop + 'px';
+      node.style.translate = `${usedLeft}px ${usedTop}px`;
     };
 
     const onMouseUp = () => {
@@ -308,8 +315,7 @@ const _createWindowNode = (
   if (children !== null) {
     node.appendChild(contentNode);
   }
-  node.style.left = `${position.x}px`;
-  node.style.top = `${position.y}px`;
+  node.style.translate = `${position.x}px ${position.y}px`;
   node.style.zIndex = order.toString();
   node.dataset.key = key;
   return node;
