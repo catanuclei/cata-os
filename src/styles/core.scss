@@ -90,6 +90,21 @@
   &__content {
     border-top: 1px solid #ffffff;
   }
+
+  &--focused &__title {
+    background-color: #ffffff;
+    color: #000000;
+
+    &__button {
+      background-color: #ffffff;
+      color: #000000;
+
+      &:hover {
+        background-color: #000000;
+        color: #ffffff;
+      }
+    }
+  }
 }
 
 .context-menu {

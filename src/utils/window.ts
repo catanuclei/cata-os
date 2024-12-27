@@ -4,6 +4,7 @@ import { OsEventType, getOsFocusEvent } from './event';
 import { KEY_CHARACTERS } from './constants';
 
 const WINDOW_CLASS = 'window';
+const WINDOW_FOCUSED_CLASS = 'window--focused';
 const WINDOW_TITLE_CLASS = 'window__title';
 const WINDOW_TITLE_ICON_CLASS = 'window__title__icon';
 const WINDOW_TITLE_TEXT_CLASS = 'window__title__text';
@@ -37,6 +38,7 @@ export class WindowManager {
   private _desktopNode: HTMLElement;
   private _contextNode: HTMLElement;
   private _windowMap: Record<string, WindowInfo>;
+  private _focusKey: string | null;
   private _isContextOpen: boolean;
   private _desktopContextItems: ContextMenuItem[];
 
@@ -45,6 +47,7 @@ export class WindowManager {
     this._desktopNode = desktopNode;
     this._contextNode = document.createElement('ul')!;
     this._windowMap = {};
+    this._focusKey = null;
     this._isContextOpen = false;
     this._desktopContextItems = [];
 
@@ -66,6 +69,9 @@ export class WindowManager {
     this._desktopNode.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       this.openContextMenu(this._desktopContextItems, e.clientX, e.clientY);
+    });
+    this._desktopNode.addEventListener('mousedown', () => {
+      this._focusWindow(null);
     });
     this._initializeEventListeners();
   }
@@ -99,7 +105,8 @@ export class WindowManager {
           [{ text: 'Close', handler: () => this.closeWindow(key) }],
           mouseX,
           mouseY
-        )
+        ),
+      () => !this._isContextOpen
     );
     this._managerNode.appendChild(windowNode);
     this._windowMap[key] = windowInfo;
@@ -121,7 +128,7 @@ export class WindowManager {
   };
 
   public focusWindow = (key: string) => {
-    if (!this._windowMap[key]) return;
+    if (!this._windowMap[key] || this._focusKey === key) return;
     this._managerNode.dispatchEvent(getOsFocusEvent(key));
   };
 
@@ -170,6 +177,7 @@ export class WindowManager {
     if (!this._isContextOpen) return;
     this._contextNode.innerHTML = '';
     this._contextNode.classList.remove(`${CONTEXT_MENU_CLASS}--shown`);
+    this._isContextOpen = false;
   };
 
   private _setupContextNode = (): void => {
@@ -186,7 +194,15 @@ export class WindowManager {
     return result;
   };
 
-  private _focusWindow = (key: string) => {
+  private _focusWindow = (key: string | null) => {
+    if (key === null) {
+      (
+        [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
+      ).forEach((osWindow) => {
+        osWindow.classList['remove'](WINDOW_FOCUSED_CLASS);
+      });
+      return;
+    }
     const originalOrder = this._windowMap[key].order;
     const maxOrder = Object.values(this._windowMap).sort(
       (a, b) => b.order - a.order
@@ -200,8 +216,11 @@ export class WindowManager {
     (
       [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
     ).forEach((osWindow) => {
-      const key = osWindow.dataset.key!;
-      osWindow.style.zIndex = this._windowMap[key].order.toString();
+      const osWindowKey = osWindow.dataset.key!;
+      osWindow.style.zIndex = this._windowMap[osWindowKey].order.toString();
+      osWindow.classList[key === osWindowKey ? 'add' : 'remove'](
+        WINDOW_FOCUSED_CLASS
+      );
     });
   };
 
@@ -262,7 +281,8 @@ const _createWindowNode = (
   key: string,
   closeHandler: (key: string) => void,
   focusHandler: (key: string) => void,
-  contextHandler: (key: string, mouseX: number, mouseY: number) => void
+  contextHandler: (key: string, mouseX: number, mouseY: number) => void,
+  movementPredicate: () => boolean
 ): HTMLElement => {
   const node = document.createElement('div')!;
   const titleNode = document.createElement('p')!;
@@ -303,6 +323,7 @@ const _createWindowNode = (
     const baseY = e.clientY - boundingRect.top;
 
     const onMouseMove = (e: MouseEvent) => {
+      if (!movementPredicate()) return;
       const usedTop =
         e.clientY - baseY < 0
           ? 0
