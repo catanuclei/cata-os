@@ -1,20 +1,42 @@
 import { createIcon } from './icon';
 
+import {
+  OsEventType,
+  getOsFocusEvent,
+  getOsMaximizeEvent,
+  getOsUnmaximizeEvent,
+} from './event';
 import { KEY_CHARACTERS } from './constants';
 
 const WINDOW_CLASS = 'window';
+const WINDOW_FOCUSED_CLASS = 'window--focused';
 const WINDOW_TITLE_CLASS = 'window__title';
 const WINDOW_TITLE_ICON_CLASS = 'window__title__icon';
 const WINDOW_TITLE_TEXT_CLASS = 'window__title__text';
 const WINDOW_TITLE_BUTTONS_CLASS = 'window__title__buttons';
 const WINDOW_TITLE_BUTTON_CLASS = 'window__title__button';
+const WINDOW_TITLE_MAXIMIZE_CLASS = 'window__title__maximize';
+const WINDOW_TITLE_CLOSE_CLASS = 'window__title__close';
+const WINDOW_CONTENT_CLASS = 'window__content';
+const WINDOW_RESIZE_BOX_CLASS = 'window__resize-box';
+const WINDOW_RESIZE_BOX_TOP_CLASS = 'window__resize-box--top';
+const WINDOW_RESIZE_BOX_RIGHT_CLASS = 'window__resize-box--right';
+const WINDOW_RESIZE_BOX_BOTTOM_CLASS = 'window__resize-box--bottom';
+const WINDOW_RESIZE_BOX_LEFT_CLASS = 'window__resize-box--left';
+const WINDOW_RESIZE_BOX_TOP_LEFT_CLASS = 'window__resize-box--top-left';
+const WINDOW_RESIZE_BOX_TOP_RIGHT_CLASS = 'window__resize-box--top-right';
+const WINDOW_RESIZE_BOX_BOTTOM_LEFT_CLASS = 'window__resize-box--bottom-left';
+const WINDOW_RESIZE_BOX_BOTTOM_RIGHT_CLASS = 'window__resize-box--bottom-right';
 const WINDOW_KEY_LENGTH = 6;
 const CONTEXT_MENU_CLASS = 'context-menu';
 const CONTEXT_MENU_ITEM_CLASS = 'context-menu__item';
 
 interface WindowInfo {
   title: string;
+  icon: string | null;
+  minDimensions: { width: number; height: number };
   order: number;
+  _premaximizeRect: DOMRect | null;
 }
 
 interface WindowResponse {
@@ -35,22 +57,32 @@ export class WindowManager {
   private _desktopNode: HTMLElement;
   private _contextNode: HTMLElement;
   private _windowMap: Record<string, WindowInfo>;
+  private _focusKey: string | null;
   private _isContextOpen: boolean;
   private _desktopContextItems: ContextMenuItem[];
+  private _windowManagerWidth: number;
+  private _windowManagerHeight: number;
 
   public constructor(managerNode: HTMLElement, desktopNode: HTMLElement) {
+    const managerBoundingRect = managerNode.getBoundingClientRect();
     this._managerNode = managerNode;
     this._desktopNode = desktopNode;
     this._contextNode = document.createElement('ul')!;
     this._windowMap = {};
+    this._focusKey = null;
     this._isContextOpen = false;
     this._desktopContextItems = [];
-
+    this._windowManagerWidth = managerBoundingRect.width;
+    this._windowManagerHeight = managerBoundingRect.height;
     this._setupContextNode();
+
     let timeout: number;
     window.addEventListener('resize', () => {
+      const managerBoundingRect = this._managerNode.getBoundingClientRect();
+      this._windowManagerWidth = managerBoundingRect.width;
+      this._windowManagerHeight = managerBoundingRect.height;
       clearTimeout(timeout);
-      timeout = setTimeout(this._shiftOutOfBoundsWindows, 150);
+      timeout = setTimeout(this._shiftAndScaleOutOfBoundsWindows, 150);
     });
     window.addEventListener('mousedown', (e) => {
       if (
@@ -61,15 +93,25 @@ export class WindowManager {
       }
       this.closeContextMenu();
     });
-    this._desktopNode.addEventListener('contextmenu', (e) => {
+    this._managerNode.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       this.openContextMenu(this._desktopContextItems, e.clientX, e.clientY);
     });
+    this._managerNode.addEventListener('mousedown', () => {
+      this._focusWindow(null);
+    });
+    this._contextNode.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+    });
+    this._initializeEventListeners();
   }
 
   public createWindow = (
     title: string,
-    position?: { x: number; y: number }
+    icon: string | null,
+    children: HTMLElement[] | null = null,
+    position: { x: number; y: number } = { x: 0, y: 0 },
+    minDimensions: { width: number; height: number } = { width: 96, height: 72 }
   ): WindowResponse => {
     let key = this._generateWindowKey();
     while (this._windowMap[key]) {
@@ -79,10 +121,19 @@ export class WindowManager {
       ? Object.values(this._windowMap).sort((a, b) => b.order - a.order)[0]
           .order + 1
       : 0;
+    const windowInfo: WindowInfo = {
+      title,
+      icon,
+      minDimensions,
+      order: newOrder,
+      _premaximizeRect: null,
+    };
     const windowNode = _createWindowNode(
-      { title, order: newOrder },
+      windowInfo,
+      children,
       { x: position?.x ?? 0, y: position?.y ?? 0 },
       key,
+      this.maximizeWindow,
       this.closeWindow,
       this.focusWindow,
       (key, mouseX, mouseY) =>
@@ -90,15 +141,35 @@ export class WindowManager {
           [{ text: 'Close', handler: () => this.closeWindow(key) }],
           mouseX,
           mouseY
-        )
+        ),
+      this.closeContextMenu,
+      () => !this._isContextOpen,
+      () => !!this._windowMap[key]?._premaximizeRect,
+      () => ({
+        width: this._windowManagerWidth,
+        height: this._windowManagerHeight,
+      })
     );
     this._managerNode.appendChild(windowNode);
-    this._windowMap[key] = {
-      title,
-      order: newOrder,
-    };
-    this._shiftOutOfBoundsWindow(key);
+    this._windowMap[key] = windowInfo;
+    this._shiftAndScaleOutOfBoundsWindow(key);
+    this.focusWindow(key);
     return { key };
+  };
+
+  public maximizeWindow = (key: string, shift: boolean = true) => {
+    if (!this._windowMap[key]) return;
+    if (!this._windowMap[key]._premaximizeRect) {
+      this._managerNode.dispatchEvent(getOsFocusEvent(key));
+      this._managerNode.dispatchEvent(getOsMaximizeEvent(key));
+      return;
+    }
+    this._managerNode.dispatchEvent(getOsUnmaximizeEvent(key, shift));
+  };
+
+  public unmaximizeWindow = (key: string, shift: boolean = true) => {
+    if (!this._windowMap[key]) return;
+    this._managerNode.dispatchEvent(getOsUnmaximizeEvent(key, shift));
   };
 
   public closeWindow = (key: string) => {
@@ -114,23 +185,8 @@ export class WindowManager {
   };
 
   public focusWindow = (key: string) => {
-    if (!this._windowMap[key]) return;
-    const originalOrder = this._windowMap[key].order;
-    const maxOrder = Object.values(this._windowMap).sort(
-      (a, b) => b.order - a.order
-    )[0].order;
-    Object.keys(this._windowMap).forEach((key) => {
-      if (this._windowMap[key].order > originalOrder) {
-        this._windowMap[key].order--;
-      }
-    });
-    this._windowMap[key].order = maxOrder;
-    (
-      [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
-    ).forEach((osWindow) => {
-      const key = osWindow.dataset.key!;
-      osWindow.style.zIndex = this._windowMap[key].order.toString();
-    });
+    if (!this._windowMap[key] || this._focusKey === key) return;
+    this._managerNode.dispatchEvent(getOsFocusEvent(key));
   };
 
   public openContextMenu = (
@@ -150,11 +206,11 @@ export class WindowManager {
     this._contextNode.classList.add(`${CONTEXT_MENU_CLASS}--shown`);
 
     const menuX =
-      mouseX + this._contextNode.offsetWidth > window.innerWidth
+      mouseX + this._contextNode.offsetWidth > this._windowManagerWidth
         ? mouseX - this._contextNode.offsetWidth
         : mouseX;
     const menuY =
-      mouseY + this._contextNode.offsetHeight > window.innerHeight
+      mouseY + this._contextNode.offsetHeight > this._windowManagerHeight
         ? mouseY - this._contextNode.offsetHeight
         : mouseY;
 
@@ -167,8 +223,7 @@ export class WindowManager {
       }
     );
 
-    this._contextNode.style.left = `${menuX}px`;
-    this._contextNode.style.top = `${menuY}px`;
+    this._contextNode.style.translate = `${menuX}px ${menuY}px`;
   };
 
   public setDesktopContextMenu = (items: ContextMenuItem[]): void => {
@@ -179,6 +234,7 @@ export class WindowManager {
     if (!this._isContextOpen) return;
     this._contextNode.innerHTML = '';
     this._contextNode.classList.remove(`${CONTEXT_MENU_CLASS}--shown`);
+    this._isContextOpen = false;
   };
 
   private _setupContextNode = (): void => {
@@ -195,85 +251,288 @@ export class WindowManager {
     return result;
   };
 
-  private _shiftOutOfBoundsWindows = (): void => {
+  private _focusWindow = (key: string | null) => {
+    if (key === null) {
+      (
+        [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
+      ).forEach((osWindow) => {
+        osWindow.classList['remove'](WINDOW_FOCUSED_CLASS);
+      });
+      return;
+    }
+    const originalOrder = this._windowMap[key].order;
+    const maxOrder = Object.values(this._windowMap).sort(
+      (a, b) => b.order - a.order
+    )[0].order;
+    Object.keys(this._windowMap).forEach((key) => {
+      if (this._windowMap[key].order > originalOrder) {
+        this._windowMap[key].order--;
+      }
+    });
+    this._windowMap[key].order = maxOrder;
     (
       [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
     ).forEach((osWindow) => {
-      if (osWindow.offsetLeft > window.innerWidth - osWindow.offsetWidth) {
-        osWindow.style.left = window.innerWidth - osWindow.offsetWidth + 'px';
-      }
-      if (osWindow.offsetTop > window.innerHeight - osWindow.offsetHeight) {
-        osWindow.style.top = window.innerHeight - osWindow.offsetHeight + 'px';
-      }
+      const osWindowKey = osWindow.dataset.key!;
+      osWindow.style.zIndex = (
+        this._windowMap[osWindowKey].order + 1
+      ).toString();
+      osWindow.classList[key === osWindowKey ? 'add' : 'remove'](
+        WINDOW_FOCUSED_CLASS
+      );
     });
   };
 
-  private _shiftOutOfBoundsWindow = (key: string): void => {
+  private _maximizeWindow = (key: string) => {
+    const node = this._managerNode.querySelector(
+      `[data-key="${key}"]`
+    ) as HTMLElement;
+    this._windowMap[key]._premaximizeRect = node.getBoundingClientRect();
+    node.style.translate = '0px 0px';
+    node.style.width = `${this._windowManagerWidth}px`;
+    node.style.height = `${this._windowManagerHeight}px`;
+    const maximizeIcon = node.querySelector(`.${WINDOW_TITLE_MAXIMIZE_CLASS}`)!;
+    maximizeIcon.classList.remove('bi-arrows-angle-expand');
+    maximizeIcon.classList.add('bi-arrows-angle-contract');
+  };
+
+  private _unmaximizeWindow = (key: string, shift: boolean = true) => {
+    const premaximizeRect = this._windowMap[key]._premaximizeRect;
+    if (!premaximizeRect) {
+      return;
+    }
+    const node = this._managerNode.querySelector(
+      `[data-key="${key}"]`
+    ) as HTMLElement;
+    if (shift) {
+      node.style.translate = `${premaximizeRect.left}px ${premaximizeRect.top}px`;
+      node.style.width = `${premaximizeRect.width}px`;
+      node.style.height = `${premaximizeRect.height}px`;
+    }
+    const maximizeIcon = node.querySelector(`.${WINDOW_TITLE_MAXIMIZE_CLASS}`)!;
+    maximizeIcon.classList.remove('bi-arrows-angle-contract');
+    maximizeIcon.classList.add('bi-arrows-angle-expand');
+    this._windowMap[key]._premaximizeRect = null;
+    this._shiftAndScaleOutOfBoundsWindow(key);
+  };
+
+  private _shiftAndScaleOutOfBoundsWindows = (): void => {
+    (
+      [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
+    ).forEach((osWindow) => {
+      const key = osWindow.dataset.key!;
+      const boundingRect = osWindow.getBoundingClientRect();
+      const premaximizeRect = this._windowMap[key]._premaximizeRect;
+      let usedLeft = boundingRect.left;
+      let usedTop = boundingRect.top;
+      if (boundingRect.width > this._windowManagerWidth) {
+        osWindow.style.width = `${this._windowManagerWidth}px`;
+      }
+      if (boundingRect.height > this._windowManagerHeight) {
+        osWindow.style.height = `${this._windowManagerHeight}px`;
+      }
+      if (boundingRect.left > this._windowManagerWidth - osWindow.offsetWidth) {
+        usedLeft = this._windowManagerWidth - osWindow.offsetWidth;
+      } else if (boundingRect.left < 0) {
+        usedLeft = 0;
+      }
+      if (
+        boundingRect.top >
+        this._windowManagerHeight - osWindow.offsetHeight
+      ) {
+        usedTop = this._windowManagerHeight - osWindow.offsetHeight;
+      } else if (boundingRect.top < 0) {
+        usedTop = 0;
+      }
+      const currentRect = osWindow.getBoundingClientRect();
+      if (
+        premaximizeRect &&
+        (this._windowManagerWidth > currentRect.width ||
+          this._windowManagerHeight > currentRect.height)
+      ) {
+        this._unmaximizeWindow(key, false);
+      }
+      osWindow.style.translate = `${usedLeft}px ${usedTop}px`;
+    });
+  };
+
+  private _shiftAndScaleOutOfBoundsWindow = (key: string): void => {
     if (!this._windowMap[key]) return;
     const node = this._managerNode.querySelector(
       `[data-key="${key}"]`
     ) as HTMLElement;
-    if (node.offsetLeft > window.innerWidth - node.offsetWidth) {
-      node.style.left = window.innerWidth - node.offsetWidth + 'px';
+    const boundingRect = node.getBoundingClientRect();
+    const premaximizeRect = this._windowMap[key]._premaximizeRect;
+    let usedLeft = boundingRect.left;
+    let usedTop = boundingRect.top;
+    if (boundingRect.width > this._windowManagerWidth) {
+      node.style.width = `${this._windowManagerWidth}px`;
     }
-    if (node.offsetTop > window.innerHeight - node.offsetHeight) {
-      node.style.top = window.innerHeight - node.offsetHeight + 'px';
+    if (boundingRect.height > this._windowManagerHeight) {
+      node.style.height = `${this._windowManagerHeight}px`;
     }
+    if (boundingRect.left > this._windowManagerWidth - node.offsetWidth) {
+      usedLeft = this._windowManagerWidth - node.offsetWidth;
+    } else if (boundingRect.left < 0) {
+      usedLeft = 0;
+    }
+    if (boundingRect.top > this._windowManagerHeight - node.offsetHeight) {
+      usedTop = this._windowManagerHeight - node.offsetHeight;
+    } else if (boundingRect.top < 0) {
+      usedTop = 0;
+    }
+    const currentRect = node.getBoundingClientRect();
+    if (
+      premaximizeRect &&
+      (this._windowManagerWidth > currentRect.width ||
+        this._windowManagerHeight > currentRect.height)
+    ) {
+      this._unmaximizeWindow(key, false);
+    }
+    node.style.translate = `${usedLeft}px ${usedTop}px`;
+  };
+
+  private _initializeEventListeners = (): void => {
+    this._managerNode.addEventListener(OsEventType.FOCUS, (e: Event) => {
+      const key = (e as CustomEvent).detail.key;
+      this._focusWindow(key);
+    });
+    this._managerNode.addEventListener(OsEventType.MAXIMIZE, (e: Event) => {
+      const key = (e as CustomEvent).detail.key;
+      this._maximizeWindow(key);
+    });
+    this._managerNode.addEventListener(OsEventType.UNMAXIMIZE, (e: Event) => {
+      const key = (e as CustomEvent).detail.key;
+      const shift = (e as CustomEvent).detail.shift;
+      this._unmaximizeWindow(key, shift ?? true);
+    });
   };
 }
 
 const _createWindowNode = (
-  { title, order }: WindowInfo,
+  { title, icon, minDimensions, order }: WindowInfo,
+  children: HTMLElement[] | null,
   position: { x: number; y: number },
   key: string,
+  maximizeHandler: (key: string, shift: boolean) => void,
   closeHandler: (key: string) => void,
   focusHandler: (key: string) => void,
-  contextHandler: (key: string, mouseX: number, mouseY: number) => void
+  contextHandler: (key: string, mouseX: number, mouseY: number) => void,
+  contextCloseHandler: () => void,
+  movementPredicate: () => boolean,
+  fullscreenPredicate: () => boolean,
+  windowManagerDimensionGetter: () => { width: number; height: number }
 ): HTMLElement => {
   const node = document.createElement('div')!;
   const titleNode = document.createElement('p')!;
   const titleIconNode = document.createElement('span')!;
   const titleTextNode = document.createElement('span')!;
   const titleButtonsNode = document.createElement('div')!;
+  const maximizeButtonNode = document.createElement('button')!;
+  const maximizeIconNode = createIcon(
+    'arrows-angle-expand',
+    WINDOW_TITLE_MAXIMIZE_CLASS
+  );
   const closeButtonNode = document.createElement('button')!;
-  const closeIconNode = createIcon('x');
+  const closeIconNode = createIcon('x-lg', WINDOW_TITLE_CLOSE_CLASS);
+  const contentNode = document.createElement('div'!);
+
+  // Resize Boxes
+  const topResizeBoxNode = document.createElement('div')!;
+  const rightResizeBoxNode = document.createElement('div')!;
+  const bottomResizeBoxNode = document.createElement('div')!;
+  const leftResizeBoxNode = document.createElement('div')!;
+  const topLeftResizeBoxNode = document.createElement('div')!;
+  const topRightResizeBoxNode = document.createElement('div')!;
+  const bottomLeftResizeBoxNode = document.createElement('div')!;
+  const bottomRightResizeBoxNode = document.createElement('div')!;
+
+  topResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_TOP_CLASS
+  );
+  rightResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_RIGHT_CLASS
+  );
+  bottomResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_BOTTOM_CLASS
+  );
+  leftResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_LEFT_CLASS
+  );
+  topLeftResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_TOP_LEFT_CLASS
+  );
+  topRightResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_TOP_RIGHT_CLASS
+  );
+  bottomLeftResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_BOTTOM_LEFT_CLASS
+  );
+  bottomRightResizeBoxNode.classList.add(
+    WINDOW_RESIZE_BOX_CLASS,
+    WINDOW_RESIZE_BOX_BOTTOM_RIGHT_CLASS
+  );
 
   node.classList.add(WINDOW_CLASS);
   titleNode.classList.add(WINDOW_TITLE_CLASS);
   titleIconNode.classList.add(WINDOW_TITLE_ICON_CLASS);
   titleTextNode.classList.add(WINDOW_TITLE_TEXT_CLASS);
   titleButtonsNode.classList.add(WINDOW_TITLE_BUTTONS_CLASS);
+  maximizeButtonNode.classList.add(WINDOW_TITLE_BUTTON_CLASS);
   closeButtonNode.classList.add(WINDOW_TITLE_BUTTON_CLASS);
+  contentNode.classList.add(WINDOW_CONTENT_CLASS);
 
-  titleIconNode.appendChild(createIcon('window'));
+  if (icon) {
+    titleIconNode.appendChild(createIcon(icon));
+  }
+
   titleTextNode.innerHTML = title;
+  maximizeButtonNode.appendChild(maximizeIconNode);
   closeButtonNode.appendChild(closeIconNode);
+  titleButtonsNode.appendChild(maximizeButtonNode);
   titleButtonsNode.appendChild(closeButtonNode);
-  titleNode.appendChild(titleIconNode);
+  if (icon) {
+    titleNode.appendChild(titleIconNode);
+  }
   titleNode.appendChild(titleTextNode);
   titleNode.appendChild(titleButtonsNode);
+
+  if (children) {
+    children.forEach((child) => {
+      contentNode.appendChild(child);
+    });
+  }
 
   titleNode.addEventListener('mousedown', (e) => {
     const width = node.offsetWidth;
     const height = node.offsetHeight;
-    const baseX = e.clientX - node.offsetLeft;
-    const baseY = e.clientY - node.offsetTop;
+    const boundingRect = node.getBoundingClientRect();
+    const baseX = e.clientX - boundingRect.left;
+    const baseY = e.clientY - boundingRect.top;
+    const windowManagerDimensions = windowManagerDimensionGetter();
 
     const onMouseMove = (e: MouseEvent) => {
+      if (!movementPredicate()) return;
       const usedTop =
         e.clientY - baseY < 0
           ? 0
-          : e.clientY - baseY >= window.innerHeight - height
-            ? window.innerHeight - height
+          : e.clientY - baseY >= windowManagerDimensions.height - height
+            ? windowManagerDimensions.height - height
             : e.clientY - baseY;
       const usedLeft =
         e.clientX - baseX < 0
           ? 0
-          : e.clientX - baseX >= window.innerWidth - width
-            ? window.innerWidth - width
+          : e.clientX - baseX >= windowManagerDimensions.width - width
+            ? windowManagerDimensions.width - width
             : e.clientX - baseX;
-      node.style.left = usedLeft + 'px';
-      node.style.top = usedTop + 'px';
+      node.style.translate = `${usedLeft}px ${usedTop}px`;
     };
 
     const onMouseUp = () => {
@@ -281,21 +540,177 @@ const _createWindowNode = (
       document.removeEventListener('mouseup', onMouseUp);
     };
 
+    contextCloseHandler();
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   });
 
-  node.addEventListener('mousedown', () => focusHandler(key));
+  titleNode.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    contextCloseHandler();
+    maximizeHandler(key, true);
+  });
+
+  node.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    contextCloseHandler();
+    focusHandler(key);
+  });
   node.addEventListener('contextmenu', (e) => {
     e.preventDefault();
+    e.stopPropagation();
+    contextCloseHandler();
     contextHandler(key, e.clientX, e.clientY);
   });
-  closeIconNode.addEventListener('mousedown', () => closeHandler(key));
+  maximizeButtonNode.addEventListener('mousedown', () => {
+    contextCloseHandler();
+    maximizeHandler(key, true);
+  });
+  closeButtonNode.addEventListener('mousedown', () => {
+    contextCloseHandler();
+    closeHandler(key);
+  });
+
+  const onResize = (e: MouseEvent, axis: { x: number; y: number }) => {
+    const boundingRect = node.getBoundingClientRect();
+    const baseX = e.clientX;
+    const baseY = e.clientY;
+    const windowManagerDimensions = windowManagerDimensionGetter();
+    const maxWidth = windowManagerDimensions.width - boundingRect.left;
+    const maxHeight = windowManagerDimensions.height - boundingRect.top;
+    const minWidth = minDimensions.width;
+    const minHeight = minDimensions.height;
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (e: MouseEvent) => {
+      let usedX: number = boundingRect.left;
+      let usedY: number = boundingRect.top;
+      const isFullscreen = fullscreenPredicate();
+
+      if (axis.x === 1) {
+        let newWidth = boundingRect.width + e.clientX - baseX;
+        if (newWidth >= minWidth) {
+          if (newWidth >= maxWidth) {
+            newWidth = maxWidth;
+          }
+        } else {
+          newWidth = minWidth;
+        }
+        node.style.width = `${newWidth}px`;
+        if (newWidth < boundingRect.width && isFullscreen) {
+          maximizeHandler(key, false);
+        }
+      } else if (axis.x === -1) {
+        let newWidth = boundingRect.width - (e.clientX - baseX);
+        let newLeft = boundingRect.left;
+        if (e.clientX >= 0) {
+          if (boundingRect.right - e.clientX <= minWidth) {
+            newWidth = minWidth;
+            newLeft = boundingRect.right - minWidth;
+          } else {
+            newLeft = boundingRect.left + (e.clientX - baseX);
+          }
+        } else {
+          newWidth = boundingRect.right;
+          newLeft = 0;
+        }
+        if (newLeft < 0) newLeft = 0;
+        node.style.width = `${newWidth}px`;
+        usedX = newLeft;
+        if (newWidth < boundingRect.width && isFullscreen) {
+          maximizeHandler(key, false);
+        }
+      }
+      if (axis.y === 1) {
+        let newHeight = boundingRect.height + e.clientY - baseY;
+        if (newHeight >= minHeight) {
+          if (newHeight >= maxHeight) {
+            newHeight = maxHeight;
+          }
+        } else {
+          newHeight = minHeight;
+        }
+        node.style.height = `${newHeight}px`;
+        if (newHeight < boundingRect.height && isFullscreen) {
+          maximizeHandler(key, false);
+        }
+      } else if (axis.y === -1) {
+        let newHeight = boundingRect.height - (e.clientY - baseY);
+        let newTop = boundingRect.top;
+        if (e.clientY >= 0) {
+          if (boundingRect.bottom - e.clientY <= minHeight) {
+            newHeight = minHeight;
+            newTop = boundingRect.bottom - minHeight;
+          } else {
+            newTop = boundingRect.top + (e.clientY - baseY);
+          }
+        } else {
+          newHeight = boundingRect.bottom;
+          newTop = 0;
+        }
+        if (newTop < 0) newTop = 0;
+        node.style.height = `${newHeight}px`;
+        usedY = newTop;
+        if (newHeight < boundingRect.height && isFullscreen) {
+          maximizeHandler(key, false);
+        }
+      }
+      node.style.translate = `${usedX}px ${usedY}px`;
+    };
+
+    const onMouseUp = () => {
+      document.body.style.userSelect = 'unset';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    contextCloseHandler();
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  topResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: 0, y: -1 })
+  );
+  bottomResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: 0, y: 1 })
+  );
+  leftResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: -1, y: 0 })
+  );
+  rightResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: 1, y: 0 })
+  );
+  topLeftResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: -1, y: -1 })
+  );
+  topRightResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: 1, y: -1 })
+  );
+  bottomLeftResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: -1, y: 1 })
+  );
+  bottomRightResizeBoxNode.addEventListener('mousedown', (e) =>
+    onResize(e, { x: 1, y: 1 })
+  );
+
+  node.appendChild(topResizeBoxNode);
+  node.appendChild(rightResizeBoxNode);
+  node.appendChild(bottomResizeBoxNode);
+  node.appendChild(leftResizeBoxNode);
+  node.appendChild(topLeftResizeBoxNode);
+  node.appendChild(topRightResizeBoxNode);
+  node.appendChild(bottomLeftResizeBoxNode);
+  node.appendChild(bottomRightResizeBoxNode);
 
   node.appendChild(titleNode);
-  node.style.left = `${position.x}px`;
-  node.style.top = `${position.y}px`;
-  node.style.zIndex = order.toString();
+  if (children !== null) {
+    node.appendChild(contentNode);
+  }
+  node.style.minWidth = `${minDimensions.width}px`;
+  node.style.minHeight = `${minDimensions.height}px`;
+  node.style.translate = `${position.x}px ${position.y}px`;
+  node.style.zIndex = (order + 1).toString();
   node.dataset.key = key;
   return node;
 };

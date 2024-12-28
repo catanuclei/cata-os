@@ -8,7 +8,7 @@
 
 .desktop__info {
   position: fixed;
-  bottom: 8px;
+  bottom: 34px;
   right: 8px;
   display: flex;
   flex-direction: column;
@@ -20,12 +20,43 @@
   user-select: none;
 }
 
+#bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 26px;
+  background-color: #000000;
+  border-top: 1px solid #ffffff;
+  z-index: 1;
+}
+
+.bar__modules {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  padding: 2px;
+  height: 100%;
+
+  &__module {
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+    padding-top: 1px;
+    height: 100%;
+    color: #ffffff;
+    border: 1px solid #ffffff;
+  }
+}
+
 #window-manager {
   position: fixed;
   top: 0px;
   left: 0px;
-  display: flex;
-  flex-direction: column;
+  width: 100%;
+  height: calc(100% - 26px);
   z-index: 0;
 }
 
@@ -33,38 +64,149 @@
   position: absolute;
   top: 0;
   left: 0;
+  background-color: #000000;
   color: #ffffff;
   border: 1px solid #ffffff;
-  width: max-content;
   min-width: 96px;
+  min-height: 72px;
 
   &__title {
     display: flex;
     align-items: center;
+    height: 15px;
     background-color: #000000;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
 
+    &__icon {
+      margin-left: 2px;
+      margin-right: 4px;
+      font-size: 10px;
+    }
+
+    &__text {
+      position: relative;
+      top: 1px;
+    }
+
     &__buttons {
       display: flex;
       align-items: center;
       margin-left: auto;
       height: 100%;
-      border-left: 1px solid #ffffff;
     }
 
     &__button {
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100%;
-      background-color: unset;
+      width: 15px;
+      height: 15px;
+      background-color: #000000;
       color: #ffffff;
       border: unset;
+      border-left: 1px solid #ffffff;
       outline: unset;
       cursor: pointer;
+      font-size: 10px;
+
+      &:hover {
+        background-color: #ffffff;
+        color: #000000;
+      }
+    }
+
+    &__maximize {
+      font-size: 9px;
+    }
+  }
+
+  &__content {
+    border-top: 1px solid #ffffff;
+  }
+
+  &--focused &__title {
+    background-color: #ffffff;
+    color: #000000;
+
+    &__button {
+      background-color: #ffffff;
+      color: #000000;
+
+      &:hover {
+        background-color: #000000;
+        color: #ffffff;
+      }
+    }
+  }
+
+  &__resize-box {
+    position: absolute;
+
+    &--top {
+      top: -2px;
+      left: 4px;
+      width: calc(100% - 8px);
+      height: 4px;
+      cursor: n-resize;
+    }
+
+    &--bottom {
+      bottom: -2px;
+      left: 4px;
+      width: calc(100% - 8px);
+      height: 4px;
+      cursor: s-resize;
+    }
+
+    &--left {
+      top: 4px;
+      left: -2px;
+      width: 4px;
+      height: calc(100% - 8px);
+      cursor: w-resize;
+    }
+
+    &--right {
+      top: 4px;
+      right: -2px;
+      width: 4px;
+      height: calc(100% - 8px);
+      cursor: e-resize;
+    }
+
+    &--top-left {
+      top: -2px;
+      left: -2px;
+      width: 4px;
+      height: 4px;
+      cursor: nw-resize;
+    }
+
+    &--top-right {
+      top: -2px;
+      right: -2px;
+      width: 4px;
+      height: 4px;
+      cursor: ne-resize;
+    }
+
+    &--bottom-left {
+      bottom: -2px;
+      left: -2px;
+      width: 4px;
+      height: 4px;
+      cursor: sw-resize;
+    }
+
+    &--bottom-right {
+      bottom: -2px;
+      right: -2px;
+      width: 4px;
+      height: 4px;
+      cursor: se-resize;
     }
   }
 }
