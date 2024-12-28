@@ -60,8 +60,11 @@ export class WindowManager {
   private _focusKey: string | null;
   private _isContextOpen: boolean;
   private _desktopContextItems: ContextMenuItem[];
+  private _windowManagerWidth: number;
+  private _windowManagerHeight: number;
 
   public constructor(managerNode: HTMLElement, desktopNode: HTMLElement) {
+    const managerBoundingRect = managerNode.getBoundingClientRect();
     this._managerNode = managerNode;
     this._desktopNode = desktopNode;
     this._contextNode = document.createElement('ul')!;
@@ -69,10 +72,15 @@ export class WindowManager {
     this._focusKey = null;
     this._isContextOpen = false;
     this._desktopContextItems = [];
-
+    this._windowManagerWidth = managerBoundingRect.width;
+    this._windowManagerHeight = managerBoundingRect.height;
     this._setupContextNode();
+
     let timeout: number;
     window.addEventListener('resize', () => {
+      const managerBoundingRect = this._managerNode.getBoundingClientRect();
+      this._windowManagerWidth = managerBoundingRect.width;
+      this._windowManagerHeight = managerBoundingRect.height;
       clearTimeout(timeout);
       timeout = setTimeout(this._shiftAndScaleOutOfBoundsWindows, 150);
     });
@@ -85,11 +93,11 @@ export class WindowManager {
       }
       this.closeContextMenu();
     });
-    this._desktopNode.addEventListener('contextmenu', (e) => {
+    this._managerNode.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       this.openContextMenu(this._desktopContextItems, e.clientX, e.clientY);
     });
-    this._desktopNode.addEventListener('mousedown', () => {
+    this._managerNode.addEventListener('mousedown', () => {
       this._focusWindow(null);
     });
     this._initializeEventListeners();
@@ -132,7 +140,11 @@ export class WindowManager {
           mouseY
         ),
       () => !this._isContextOpen,
-      () => !!this._windowMap[key]?._premaximizeRect
+      () => !!this._windowMap[key]?._premaximizeRect,
+      () => ({
+        width: this._windowManagerWidth,
+        height: this._windowManagerHeight,
+      })
     );
     this._managerNode.appendChild(windowNode);
     this._windowMap[key] = windowInfo;
@@ -190,11 +202,11 @@ export class WindowManager {
     this._contextNode.classList.add(`${CONTEXT_MENU_CLASS}--shown`);
 
     const menuX =
-      mouseX + this._contextNode.offsetWidth > window.innerWidth
+      mouseX + this._contextNode.offsetWidth > this._windowManagerWidth
         ? mouseX - this._contextNode.offsetWidth
         : mouseX;
     const menuY =
-      mouseY + this._contextNode.offsetHeight > window.innerHeight
+      mouseY + this._contextNode.offsetHeight > this._windowManagerHeight
         ? mouseY - this._contextNode.offsetHeight
         : mouseY;
 
@@ -258,7 +270,9 @@ export class WindowManager {
       [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
     ).forEach((osWindow) => {
       const osWindowKey = osWindow.dataset.key!;
-      osWindow.style.zIndex = this._windowMap[osWindowKey].order.toString();
+      osWindow.style.zIndex = (
+        this._windowMap[osWindowKey].order + 1
+      ).toString();
       osWindow.classList[key === osWindowKey ? 'add' : 'remove'](
         WINDOW_FOCUSED_CLASS
       );
@@ -271,8 +285,8 @@ export class WindowManager {
     ) as HTMLElement;
     this._windowMap[key]._premaximizeRect = node.getBoundingClientRect();
     node.style.translate = '0px 0px';
-    node.style.width = `${window.innerWidth}px`;
-    node.style.height = `${window.innerHeight}px`;
+    node.style.width = `${this._windowManagerWidth}px`;
+    node.style.height = `${this._windowManagerHeight}px`;
     const maximizeIcon = node.querySelector(`.${WINDOW_TITLE_MAXIMIZE_CLASS}`)!;
     maximizeIcon.classList.remove('bi-arrows-angle-expand');
     maximizeIcon.classList.add('bi-arrows-angle-contract');
@@ -307,27 +321,30 @@ export class WindowManager {
       const premaximizeRect = this._windowMap[key]._premaximizeRect;
       let usedLeft = boundingRect.left;
       let usedTop = boundingRect.top;
-      if (boundingRect.width > window.innerWidth) {
-        osWindow.style.width = `${window.innerWidth}px`;
+      if (boundingRect.width > this._windowManagerWidth) {
+        osWindow.style.width = `${this._windowManagerWidth}px`;
       }
-      if (boundingRect.height > window.innerHeight) {
-        osWindow.style.height = `${window.innerHeight}px`;
+      if (boundingRect.height > this._windowManagerHeight) {
+        osWindow.style.height = `${this._windowManagerHeight}px`;
       }
-      if (boundingRect.left > window.innerWidth - osWindow.offsetWidth) {
-        usedLeft = window.innerWidth - osWindow.offsetWidth;
+      if (boundingRect.left > this._windowManagerWidth - osWindow.offsetWidth) {
+        usedLeft = this._windowManagerWidth - osWindow.offsetWidth;
       } else if (boundingRect.left < 0) {
         usedLeft = 0;
       }
-      if (boundingRect.top > window.innerHeight - osWindow.offsetHeight) {
-        usedTop = window.innerHeight - osWindow.offsetHeight;
+      if (
+        boundingRect.top >
+        this._windowManagerHeight - osWindow.offsetHeight
+      ) {
+        usedTop = this._windowManagerHeight - osWindow.offsetHeight;
       } else if (boundingRect.top < 0) {
         usedTop = 0;
       }
       const currentRect = osWindow.getBoundingClientRect();
       if (
         premaximizeRect &&
-        (window.innerWidth > currentRect.width ||
-          window.innerHeight > currentRect.height)
+        (this._windowManagerWidth > currentRect.width ||
+          this._windowManagerHeight > currentRect.height)
       ) {
         this._unmaximizeWindow(key, false);
       }
@@ -344,27 +361,27 @@ export class WindowManager {
     const premaximizeRect = this._windowMap[key]._premaximizeRect;
     let usedLeft = boundingRect.left;
     let usedTop = boundingRect.top;
-    if (boundingRect.width > window.innerWidth) {
-      node.style.width = `${window.innerWidth}px`;
+    if (boundingRect.width > this._windowManagerWidth) {
+      node.style.width = `${this._windowManagerWidth}px`;
     }
-    if (boundingRect.height > window.innerHeight) {
-      node.style.height = `${window.innerHeight}px`;
+    if (boundingRect.height > this._windowManagerHeight) {
+      node.style.height = `${this._windowManagerHeight}px`;
     }
-    if (boundingRect.left > window.innerWidth - node.offsetWidth) {
-      usedLeft = window.innerWidth - node.offsetWidth;
+    if (boundingRect.left > this._windowManagerWidth - node.offsetWidth) {
+      usedLeft = this._windowManagerWidth - node.offsetWidth;
     } else if (boundingRect.left < 0) {
       usedLeft = 0;
     }
-    if (boundingRect.top > window.innerHeight - node.offsetHeight) {
-      usedTop = window.innerHeight - node.offsetHeight;
+    if (boundingRect.top > this._windowManagerHeight - node.offsetHeight) {
+      usedTop = this._windowManagerHeight - node.offsetHeight;
     } else if (boundingRect.top < 0) {
       usedTop = 0;
     }
     const currentRect = node.getBoundingClientRect();
     if (
       premaximizeRect &&
-      (window.innerWidth > currentRect.width ||
-        window.innerHeight > currentRect.height)
+      (this._windowManagerWidth > currentRect.width ||
+        this._windowManagerHeight > currentRect.height)
     ) {
       this._unmaximizeWindow(key, false);
     }
@@ -398,7 +415,8 @@ const _createWindowNode = (
   focusHandler: (key: string) => void,
   contextHandler: (key: string, mouseX: number, mouseY: number) => void,
   movementPredicate: () => boolean,
-  fullscreenPredicate: () => boolean
+  fullscreenPredicate: () => boolean,
+  windowManagerDimensionGetter: () => { width: number; height: number }
 ): HTMLElement => {
   const node = document.createElement('div')!;
   const titleNode = document.createElement('p')!;
@@ -493,20 +511,21 @@ const _createWindowNode = (
     const boundingRect = node.getBoundingClientRect();
     const baseX = e.clientX - boundingRect.left;
     const baseY = e.clientY - boundingRect.top;
+    const windowManagerDimensions = windowManagerDimensionGetter();
 
     const onMouseMove = (e: MouseEvent) => {
       if (!movementPredicate()) return;
       const usedTop =
         e.clientY - baseY < 0
           ? 0
-          : e.clientY - baseY >= window.innerHeight - height
-            ? window.innerHeight - height
+          : e.clientY - baseY >= windowManagerDimensions.height - height
+            ? windowManagerDimensions.height - height
             : e.clientY - baseY;
       const usedLeft =
         e.clientX - baseX < 0
           ? 0
-          : e.clientX - baseX >= window.innerWidth - width
-            ? window.innerWidth - width
+          : e.clientX - baseX >= windowManagerDimensions.width - width
+            ? windowManagerDimensions.width - width
             : e.clientX - baseX;
       node.style.translate = `${usedLeft}px ${usedTop}px`;
     };
@@ -520,9 +539,13 @@ const _createWindowNode = (
     document.addEventListener('mouseup', onMouseUp);
   });
 
-  node.addEventListener('mousedown', () => focusHandler(key));
+  node.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    focusHandler(key);
+  });
   node.addEventListener('contextmenu', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     contextHandler(key, e.clientX, e.clientY);
   });
   maximizeButtonNode.addEventListener('mousedown', () =>
@@ -534,8 +557,9 @@ const _createWindowNode = (
     const boundingRect = node.getBoundingClientRect();
     const baseX = e.clientX;
     const baseY = e.clientY;
-    const maxWidth = window.innerWidth - boundingRect.left;
-    const maxHeight = window.innerHeight - boundingRect.top;
+    const windowManagerDimensions = windowManagerDimensionGetter();
+    const maxWidth = windowManagerDimensions.width - boundingRect.left;
+    const maxHeight = windowManagerDimensions.height - boundingRect.top;
     const minWidth = minDimensions.width;
     const minHeight = minDimensions.height;
     document.body.style.userSelect = 'none';
@@ -667,7 +691,7 @@ const _createWindowNode = (
   node.style.minWidth = `${minDimensions.width}px`;
   node.style.minHeight = `${minDimensions.height}px`;
   node.style.translate = `${position.x}px ${position.y}px`;
-  node.style.zIndex = order.toString();
+  node.style.zIndex = (order + 1).toString();
   node.dataset.key = key;
   return node;
 };
