@@ -1,6 +1,11 @@
 import { createIcon } from './icon';
 
-import { OsEventType, getOsFocusEvent } from './event';
+import {
+  OsEventType,
+  getOsFocusEvent,
+  getOsMaximizeEvent,
+  getOsUnmaximizeEvent,
+} from './event';
 import { KEY_CHARACTERS } from './constants';
 
 const WINDOW_CLASS = 'window';
@@ -10,6 +15,8 @@ const WINDOW_TITLE_ICON_CLASS = 'window__title__icon';
 const WINDOW_TITLE_TEXT_CLASS = 'window__title__text';
 const WINDOW_TITLE_BUTTONS_CLASS = 'window__title__buttons';
 const WINDOW_TITLE_BUTTON_CLASS = 'window__title__button';
+const WINDOW_TITLE_MAXIMIZE_CLASS = 'window__title__maximize';
+const WINDOW_TITLE_CLOSE_CLASS = 'window__title__close';
 const WINDOW_CONTENT_CLASS = 'window__content';
 const WINDOW_RESIZE_BOX_CLASS = 'window__resize-box';
 const WINDOW_RESIZE_BOX_TOP_CLASS = 'window__resize-box--top';
@@ -29,6 +36,7 @@ interface WindowInfo {
   icon: string | null;
   minDimensions: { width: number; height: number };
   order: number;
+  _premaximizeRect: DOMRect | null;
 }
 
 interface WindowResponse {
@@ -66,7 +74,7 @@ export class WindowManager {
     let timeout: number;
     window.addEventListener('resize', () => {
       clearTimeout(timeout);
-      timeout = setTimeout(this._shiftOutOfBoundsWindows, 150);
+      timeout = setTimeout(this._shiftAndScaleOutOfBoundsWindows, 150);
     });
     window.addEventListener('mousedown', (e) => {
       if (
@@ -107,12 +115,14 @@ export class WindowManager {
       icon,
       minDimensions,
       order: newOrder,
+      _premaximizeRect: null,
     };
     const windowNode = _createWindowNode(
       windowInfo,
       children,
       { x: position?.x ?? 0, y: position?.y ?? 0 },
       key,
+      this.maximizeWindow,
       this.closeWindow,
       this.focusWindow,
       (key, mouseX, mouseY) =>
@@ -121,13 +131,29 @@ export class WindowManager {
           mouseX,
           mouseY
         ),
-      () => !this._isContextOpen
+      () => !this._isContextOpen,
+      () => !!this._windowMap[key]?._premaximizeRect
     );
     this._managerNode.appendChild(windowNode);
     this._windowMap[key] = windowInfo;
-    this._shiftOutOfBoundsWindow(key);
+    this._shiftAndScaleOutOfBoundsWindow(key);
     this.focusWindow(key);
     return { key };
+  };
+
+  public maximizeWindow = (key: string, shift: boolean = true) => {
+    if (!this._windowMap[key]) return;
+    if (!this._windowMap[key]._premaximizeRect) {
+      this._managerNode.dispatchEvent(getOsFocusEvent(key));
+      this._managerNode.dispatchEvent(getOsMaximizeEvent(key));
+      return;
+    }
+    this._managerNode.dispatchEvent(getOsUnmaximizeEvent(key, shift));
+  };
+
+  public unmaximizeWindow = (key: string, shift: boolean = true) => {
+    if (!this._windowMap[key]) return;
+    this._managerNode.dispatchEvent(getOsUnmaximizeEvent(key, shift));
   };
 
   public closeWindow = (key: string) => {
@@ -239,13 +265,54 @@ export class WindowManager {
     });
   };
 
-  private _shiftOutOfBoundsWindows = (): void => {
+  private _maximizeWindow = (key: string) => {
+    const node = this._managerNode.querySelector(
+      `[data-key="${key}"]`
+    ) as HTMLElement;
+    this._windowMap[key]._premaximizeRect = node.getBoundingClientRect();
+    node.style.translate = '0px 0px';
+    node.style.width = `${window.innerWidth}px`;
+    node.style.height = `${window.innerHeight}px`;
+    const maximizeIcon = node.querySelector(`.${WINDOW_TITLE_MAXIMIZE_CLASS}`)!;
+    maximizeIcon.classList.remove('bi-arrows-angle-expand');
+    maximizeIcon.classList.add('bi-arrows-angle-contract');
+  };
+
+  private _unmaximizeWindow = (key: string, shift: boolean = true) => {
+    const premaximizeRect = this._windowMap[key]._premaximizeRect;
+    if (!premaximizeRect) {
+      return;
+    }
+    const node = this._managerNode.querySelector(
+      `[data-key="${key}"]`
+    ) as HTMLElement;
+    if (shift) {
+      node.style.translate = `${premaximizeRect.left}px ${premaximizeRect.top}px`;
+      node.style.width = `${premaximizeRect.width}px`;
+      node.style.height = `${premaximizeRect.height}px`;
+    }
+    const maximizeIcon = node.querySelector(`.${WINDOW_TITLE_MAXIMIZE_CLASS}`)!;
+    maximizeIcon.classList.remove('bi-arrows-angle-contract');
+    maximizeIcon.classList.add('bi-arrows-angle-expand');
+    this._windowMap[key]._premaximizeRect = null;
+    this._shiftAndScaleOutOfBoundsWindow(key);
+  };
+
+  private _shiftAndScaleOutOfBoundsWindows = (): void => {
     (
       [...this._managerNode.querySelectorAll('[data-key]')] as HTMLElement[]
     ).forEach((osWindow) => {
+      const key = osWindow.dataset.key!;
       const boundingRect = osWindow.getBoundingClientRect();
+      const premaximizeRect = this._windowMap[key]._premaximizeRect;
       let usedLeft = boundingRect.left;
       let usedTop = boundingRect.top;
+      if (boundingRect.width > window.innerWidth) {
+        osWindow.style.width = `${window.innerWidth}px`;
+      }
+      if (boundingRect.height > window.innerHeight) {
+        osWindow.style.height = `${window.innerHeight}px`;
+      }
       if (boundingRect.left > window.innerWidth - osWindow.offsetWidth) {
         usedLeft = window.innerWidth - osWindow.offsetWidth;
       } else if (boundingRect.left < 0) {
@@ -256,18 +323,33 @@ export class WindowManager {
       } else if (boundingRect.top < 0) {
         usedTop = 0;
       }
+      const currentRect = osWindow.getBoundingClientRect();
+      if (
+        premaximizeRect &&
+        (window.innerWidth > currentRect.width ||
+          window.innerHeight > currentRect.height)
+      ) {
+        this._unmaximizeWindow(key, false);
+      }
       osWindow.style.translate = `${usedLeft}px ${usedTop}px`;
     });
   };
 
-  private _shiftOutOfBoundsWindow = (key: string): void => {
+  private _shiftAndScaleOutOfBoundsWindow = (key: string): void => {
     if (!this._windowMap[key]) return;
     const node = this._managerNode.querySelector(
       `[data-key="${key}"]`
     ) as HTMLElement;
     const boundingRect = node.getBoundingClientRect();
+    const premaximizeRect = this._windowMap[key]._premaximizeRect;
     let usedLeft = boundingRect.left;
     let usedTop = boundingRect.top;
+    if (boundingRect.width > window.innerWidth) {
+      node.style.width = `${window.innerWidth}px`;
+    }
+    if (boundingRect.height > window.innerHeight) {
+      node.style.height = `${window.innerHeight}px`;
+    }
     if (boundingRect.left > window.innerWidth - node.offsetWidth) {
       usedLeft = window.innerWidth - node.offsetWidth;
     } else if (boundingRect.left < 0) {
@@ -278,6 +360,14 @@ export class WindowManager {
     } else if (boundingRect.top < 0) {
       usedTop = 0;
     }
+    const currentRect = node.getBoundingClientRect();
+    if (
+      premaximizeRect &&
+      (window.innerWidth > currentRect.width ||
+        window.innerHeight > currentRect.height)
+    ) {
+      this._unmaximizeWindow(key, false);
+    }
     node.style.translate = `${usedLeft}px ${usedTop}px`;
   };
 
@@ -285,6 +375,15 @@ export class WindowManager {
     this._managerNode.addEventListener(OsEventType.FOCUS, (e: Event) => {
       const key = (e as CustomEvent).detail.key;
       this._focusWindow(key);
+    });
+    this._managerNode.addEventListener(OsEventType.MAXIMIZE, (e: Event) => {
+      const key = (e as CustomEvent).detail.key;
+      this._maximizeWindow(key);
+    });
+    this._managerNode.addEventListener(OsEventType.UNMAXIMIZE, (e: Event) => {
+      const key = (e as CustomEvent).detail.key;
+      const shift = (e as CustomEvent).detail.shift;
+      this._unmaximizeWindow(key, shift ?? true);
     });
   };
 }
@@ -294,18 +393,25 @@ const _createWindowNode = (
   children: HTMLElement[] | null,
   position: { x: number; y: number },
   key: string,
+  maximizeHandler: (key: string, shift: boolean) => void,
   closeHandler: (key: string) => void,
   focusHandler: (key: string) => void,
   contextHandler: (key: string, mouseX: number, mouseY: number) => void,
-  movementPredicate: () => boolean
+  movementPredicate: () => boolean,
+  fullscreenPredicate: () => boolean
 ): HTMLElement => {
   const node = document.createElement('div')!;
   const titleNode = document.createElement('p')!;
   const titleIconNode = document.createElement('span')!;
   const titleTextNode = document.createElement('span')!;
   const titleButtonsNode = document.createElement('div')!;
+  const maximizeButtonNode = document.createElement('button')!;
+  const maximizeIconNode = createIcon(
+    'arrows-angle-expand',
+    WINDOW_TITLE_MAXIMIZE_CLASS
+  );
   const closeButtonNode = document.createElement('button')!;
-  const closeIconNode = createIcon('x-lg');
+  const closeIconNode = createIcon('x-lg', WINDOW_TITLE_CLOSE_CLASS);
   const contentNode = document.createElement('div'!);
 
   // Resize Boxes
@@ -356,6 +462,7 @@ const _createWindowNode = (
   titleIconNode.classList.add(WINDOW_TITLE_ICON_CLASS);
   titleTextNode.classList.add(WINDOW_TITLE_TEXT_CLASS);
   titleButtonsNode.classList.add(WINDOW_TITLE_BUTTONS_CLASS);
+  maximizeButtonNode.classList.add(WINDOW_TITLE_BUTTON_CLASS);
   closeButtonNode.classList.add(WINDOW_TITLE_BUTTON_CLASS);
   contentNode.classList.add(WINDOW_CONTENT_CLASS);
 
@@ -364,7 +471,9 @@ const _createWindowNode = (
   }
 
   titleTextNode.innerHTML = title;
+  maximizeButtonNode.appendChild(maximizeIconNode);
   closeButtonNode.appendChild(closeIconNode);
+  titleButtonsNode.appendChild(maximizeButtonNode);
   titleButtonsNode.appendChild(closeButtonNode);
   if (icon) {
     titleNode.appendChild(titleIconNode);
@@ -416,6 +525,9 @@ const _createWindowNode = (
     e.preventDefault();
     contextHandler(key, e.clientX, e.clientY);
   });
+  maximizeButtonNode.addEventListener('mousedown', () =>
+    maximizeHandler(key, true)
+  );
   closeButtonNode.addEventListener('mousedown', () => closeHandler(key));
 
   const onResize = (e: MouseEvent, axis: { x: number; y: number }) => {
@@ -426,12 +538,12 @@ const _createWindowNode = (
     const maxHeight = window.innerHeight - boundingRect.top;
     const minWidth = minDimensions.width;
     const minHeight = minDimensions.height;
-
     document.body.style.userSelect = 'none';
 
     const onMouseMove = (e: MouseEvent) => {
       let usedX: number = boundingRect.left;
       let usedY: number = boundingRect.top;
+      const isFullscreen = fullscreenPredicate();
 
       if (axis.x === 1) {
         let newWidth = boundingRect.width + e.clientX - baseX;
@@ -443,6 +555,9 @@ const _createWindowNode = (
           newWidth = minWidth;
         }
         node.style.width = `${newWidth}px`;
+        if (newWidth < boundingRect.width && isFullscreen) {
+          maximizeHandler(key, false);
+        }
       } else if (axis.x === -1) {
         let newWidth = boundingRect.width - (e.clientX - baseX);
         let newLeft = boundingRect.left;
@@ -460,6 +575,9 @@ const _createWindowNode = (
         if (newLeft < 0) newLeft = 0;
         node.style.width = `${newWidth}px`;
         usedX = newLeft;
+        if (newWidth < boundingRect.width && isFullscreen) {
+          maximizeHandler(key, false);
+        }
       }
       if (axis.y === 1) {
         let newHeight = boundingRect.height + e.clientY - baseY;
@@ -471,6 +589,9 @@ const _createWindowNode = (
           newHeight = minHeight;
         }
         node.style.height = `${newHeight}px`;
+        if (newHeight < boundingRect.height && isFullscreen) {
+          maximizeHandler(key, false);
+        }
       } else if (axis.y === -1) {
         let newHeight = boundingRect.height - (e.clientY - baseY);
         let newTop = boundingRect.top;
@@ -488,6 +609,9 @@ const _createWindowNode = (
         if (newTop < 0) newTop = 0;
         node.style.height = `${newHeight}px`;
         usedY = newTop;
+        if (newHeight < boundingRect.height && isFullscreen) {
+          maximizeHandler(key, false);
+        }
       }
       node.style.translate = `${usedX}px ${usedY}px`;
     };
