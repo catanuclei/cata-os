@@ -1,5 +1,6 @@
 import { initializeDesktopInfo } from '@utils/setup';
 import { WindowManager } from '@utils/window';
+import { CataBar, CataBarModules } from '@utils/bar';
 
 import 'bootstrap-icons/font/bootstrap-icons.min.css';
 
@@ -9,12 +10,16 @@ import '@styles/core.scss';
 
 const desktopEl = document.getElementById('desktop')!;
 const windowManagerEl = document.getElementById('window-manager')!;
+const barEl = document.getElementById('bar')!;
 
 initializeDesktopInfo(desktopEl.querySelector('.desktop__info')!);
 
 const windowManager = new WindowManager(windowManagerEl, desktopEl);
+const bar = new CataBar(barEl);
 const contentTextNode = document.createElement('p')!;
 const contentImageNode = document.createElement('img')!;
+
+bar.addModule(CataBarModules.getTimeModule());
 
 contentTextNode.innerHTML = 'Window Content';
 contentImageNode.src = '/img/test.gif';
