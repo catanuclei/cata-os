@@ -10,6 +10,8 @@ export class CataBar {
     this._modulesNode = document.createElement('div')!;
     this._modulesNode.classList.add(BAR_MODULES_CLASS);
     this._barNode.appendChild(this._modulesNode);
+
+    this._barNode.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
   public addModule = (moduleNode: HTMLElement) => {

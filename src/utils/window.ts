@@ -100,6 +100,9 @@ export class WindowManager {
     this._managerNode.addEventListener('mousedown', () => {
       this._focusWindow(null);
     });
+    this._contextNode.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+    });
     this._initializeEventListeners();
   }
 
@@ -139,6 +142,7 @@ export class WindowManager {
           mouseX,
           mouseY
         ),
+      this.closeContextMenu,
       () => !this._isContextOpen,
       () => !!this._windowMap[key]?._premaximizeRect,
       () => ({
@@ -414,6 +418,7 @@ const _createWindowNode = (
   closeHandler: (key: string) => void,
   focusHandler: (key: string) => void,
   contextHandler: (key: string, mouseX: number, mouseY: number) => void,
+  contextCloseHandler: () => void,
   movementPredicate: () => boolean,
   fullscreenPredicate: () => boolean,
   windowManagerDimensionGetter: () => { width: number; height: number }
@@ -535,23 +540,36 @@ const _createWindowNode = (
       document.removeEventListener('mouseup', onMouseUp);
     };
 
+    contextCloseHandler();
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   });
 
+  titleNode.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    contextCloseHandler();
+    maximizeHandler(key, true);
+  });
+
   node.addEventListener('mousedown', (e) => {
     e.stopPropagation();
+    contextCloseHandler();
     focusHandler(key);
   });
   node.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     e.stopPropagation();
+    contextCloseHandler();
     contextHandler(key, e.clientX, e.clientY);
   });
-  maximizeButtonNode.addEventListener('mousedown', () =>
-    maximizeHandler(key, true)
-  );
-  closeButtonNode.addEventListener('mousedown', () => closeHandler(key));
+  maximizeButtonNode.addEventListener('mousedown', () => {
+    contextCloseHandler();
+    maximizeHandler(key, true);
+  });
+  closeButtonNode.addEventListener('mousedown', () => {
+    contextCloseHandler();
+    closeHandler(key);
+  });
 
   const onResize = (e: MouseEvent, axis: { x: number; y: number }) => {
     const boundingRect = node.getBoundingClientRect();
@@ -646,6 +664,7 @@ const _createWindowNode = (
       document.removeEventListener('mouseup', onMouseUp);
     };
 
+    contextCloseHandler();
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   };
